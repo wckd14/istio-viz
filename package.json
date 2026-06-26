@@ -23,8 +23,20 @@
   },
   "scripts": {
     "build": "tsc",
+    "bundle": "esbuild dist/index.js --bundle --platform=node --outfile=dist/bundle.cjs --format=cjs --external:@resvg/resvg-js",
     "test": "tsc --noEmit && node --import tsx --test \"test/**/*.test.ts\"",
     "dev": "node --import tsx src/index.ts"
+  },
+  "pkg": {
+    "scripts": "dist/bundle.cjs",
+    "targets": [
+      "node22-linux-x64",
+      "node22-linux-arm64",
+      "node22-macos-x64",
+      "node22-macos-arm64",
+      "node22-win-x64"
+    ],
+    "outputPath": "release/"
   },
   "dependencies": {
     "commander": "^12.1.0",
@@ -35,6 +47,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@yao-pkg/pkg": "^6.20.0",
+    "esbuild": "^0.28.1",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }
