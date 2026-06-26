@@ -69,18 +69,7 @@ Before your first commit, configure git with your public identity so the history
 
 ```sh
 git config user.name  "Your Name"
-git config user.email "you@example.com"   # use a personal or public address, not a work one
-```
-
-If you need to rewrite author information in existing commits before making the repository public, use `git-filter-repo` (the recommended modern replacement for `filter-branch`):
-
-```sh
-pip install git-filter-repo
-git filter-repo --commit-callback '
-    if commit.author_email == b"old@work.com":
-        commit.author_email  = b"new@personal.com"
-        commit.committer_email = b"new@personal.com"
-'
+git config user.email "you@example.com"
 ```
 
 ## Reporting issues
