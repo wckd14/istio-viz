@@ -1,0 +1,25 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: shop-routes
+spec:
+  http:
+    - match:
+        - uri:
+            prefix: /api
+      route:
+        - destination:
+            host: api
+            port:
+              number: 8080
+          weight: 80
+        - destination:
+            host: api-canary
+            port:
+              number: 8080
+          weight: 20
+    - route:
+        - destination:
+            host: web
+            port:
+              number: 80

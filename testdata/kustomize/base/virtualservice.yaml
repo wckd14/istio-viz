@@ -1,0 +1,23 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: shop-routes
+spec:
+  hosts:
+    - shop.example.com
+  gateways:
+    - shop-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /api
+      route:
+        - destination:
+            host: api
+            port:
+              number: 8080
+    - route:
+        - destination:
+            host: web
+            port:
+              number: 80
