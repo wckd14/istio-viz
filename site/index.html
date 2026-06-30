@@ -1169,6 +1169,9 @@ Hosts → RouteRules → Destinations</div>
         <span class="cb-cmt"># Render an interactive routing diagram</span>
         <div><span class="cb-p">$ </span><span class="cb-cmd">istio-viz render </span><span class="cb-arg">./manifests/</span><span class="cb-flag"> -o</span><span class="cb-cmd"> routes.html</span></div>
         <div>&nbsp;</div>
+        <span class="cb-cmt"># Export diff-friendly host → match → service paths for code review</span>
+        <div><span class="cb-p">$ </span><span class="cb-cmd">istio-viz render </span><span class="cb-arg">./manifests/</span><span class="cb-flag"> --format</span><span class="cb-cmd"> paths</span><span class="cb-flag"> -o</span><span class="cb-cmd"> network-paths.txt</span></div>
+        <div>&nbsp;</div>
         <span class="cb-cmt"># Trace a specific request through your rules</span>
         <div><span class="cb-p">$ </span><span class="cb-cmd">istio-viz trace </span><span class="cb-arg">./manifests/</span><span class="cb-flag"> --host</span><span class="cb-cmd"> api.example.com</span><span class="cb-flag"> --path</span><span class="cb-cmd"> /checkout</span><span class="cb-flag"> --method</span><span class="cb-cmd"> POST</span></div>
         <div>&nbsp;</div>
