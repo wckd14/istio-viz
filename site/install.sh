@@ -7,6 +7,12 @@
 # Install a specific version:
 #   curl -fsSL https://istio-viz.wckd14.xyz/install.sh | bash -s -- v0.2.0
 #
+# Re-running the script when already installed updates an out-of-date
+# binary in place, or reports that it is already present and latest.
+#
+# Uninstall (removes istio-viz from every detected location):
+#   curl -fsSL https://istio-viz.wckd14.xyz/install.sh | bash -s -- --uninstall
+#
 # Override install directory:
 #   INSTALL_DIR=/usr/local/bin curl -fsSL https://istio-viz.wckd14.xyz/install.sh | bash
 #
@@ -16,8 +22,26 @@
 set -euo pipefail
 
 REPO="wckd14/istio-viz"
+
+# Track whether the user explicitly chose an install dir; if not, we may
+# adopt the directory of an existing installation when updating.
+if [ -n "${INSTALL_DIR:-}" ]; then INSTALL_DIR_EXPLICIT=1; else INSTALL_DIR_EXPLICIT=0; fi
 INSTALL_DIR="${INSTALL_DIR:-${HOME}/.local/bin}"
-VERSION="${ISTIO_VIZ_VERSION:-${1:-}}"
+
+# ── parse arguments ───────────────────────────────────────────────────────────
+ACTION="install"
+VERSION="${ISTIO_VIZ_VERSION:-}"
+if [ -n "${ISTIO_VIZ_VERSION:-}" ]; then VERSION_EXPLICIT=1; else VERSION_EXPLICIT=0; fi
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -u|--uninstall|uninstall) ACTION="uninstall" ;;
+    -h|--help|help)           ACTION="help" ;;
+    -*) printf 'Unknown option: %s\n' "$1" >&2; ACTION="help" ;;
+    *)  VERSION="$1"; VERSION_EXPLICIT=1 ;;
+  esac
+  shift
+done
 
 # ── color helpers (disabled when stdout is not a TTY) ─────────────────────────
 if [ -t 1 ]; then
@@ -32,6 +56,68 @@ step() { printf "${c_blue}  →${c_reset} %s\n" "$*"; }
 ok()   { printf "${c_green}  ✔${c_reset} %s\n" "$*"; }
 warn() { printf "${c_yellow}  ⚠${c_reset}  %s\n" "$*" >&2; }
 die()  { printf "\n${c_red}  ✖${c_reset}  %s\n\n" "$*" >&2; exit 1; }
+
+usage() {
+  cat <<EOF
+istio-viz installer
+
+Usage:
+  install.sh [VERSION]     Install or update istio-viz (defaults to latest)
+  install.sh --uninstall   Remove istio-viz from every detected location
+  install.sh --help        Show this help
+
+Environment:
+  INSTALL_DIR              Target directory (default: \$HOME/.local/bin)
+  ISTIO_VIZ_VERSION        Version to install (overridden by VERSION argument)
+EOF
+}
+
+# Print unique istio-viz binary paths found on PATH + common locations.
+_find_installs() {
+  {
+    IFS=:
+    for d in $PATH; do
+      [ -n "$d" ] && [ -f "$d/istio-viz" ] && printf '%s\n' "$d/istio-viz"
+    done
+  }
+  for d in "$INSTALL_DIR" "$HOME/.local/bin" "/usr/local/bin" "/opt/homebrew/bin" "/usr/bin"; do
+    [ -f "$d/istio-viz" ] && printf '%s\n' "$d/istio-viz"
+  done
+}
+
+# Extract installed version (prefixed with 'v') from a binary; empty if unknown.
+_installed_version() {
+  "$1" --version 2>/dev/null | head -n1 \
+    | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[^[:space:]]*' | head -n1 \
+    | sed 's/^/v/'
+}
+
+_uninstall() {
+  local found p
+  found="$(_find_installs | awk '!seen[$0]++')"
+  if [ -z "$found" ]; then
+    warn "istio-viz is not installed (nothing found on PATH or common locations)."
+    exit 0
+  fi
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    if [ -w "$(dirname "$p")" ] || [ -w "$p" ]; then
+      rm -f "$p" && ok "Removed ${c_bold}${p}${c_reset}"
+    else
+      warn "No write access to $p — try: sudo rm -f \"$p\""
+    fi
+  done <<EOF
+$found
+EOF
+  ok "Uninstall complete."
+  exit 0
+}
+
+# ── dispatch non-install actions ──────────────────────────────────────────────
+case "$ACTION" in
+  help)      usage; exit 0 ;;
+  uninstall) _uninstall ;;
+esac
 
 # ── dependency check ──────────────────────────────────────────────────────────
 command -v curl >/dev/null 2>&1 || die "curl is required but not found."
@@ -88,6 +174,36 @@ fi
 case "$VERSION" in v*) ;; *) VERSION="v$VERSION" ;; esac
 
 ok "Version ${c_bold}${VERSION}${c_reset}  ·  Platform ${c_bold}${PLATFORM}${c_reset}"
+
+# ── detect existing installation ──────────────────────────────────────────────
+EXISTING_BIN="$(command -v istio-viz 2>/dev/null || true)"
+if [ -z "$EXISTING_BIN" ]; then
+  EXISTING_BIN="$(_find_installs | awk '!seen[$0]++' | head -n1)"
+fi
+
+if [ -n "$EXISTING_BIN" ]; then
+  CURRENT_VERSION="$(_installed_version "$EXISTING_BIN")"
+
+  # Update in place unless the user explicitly chose an INSTALL_DIR.
+  if [ "$INSTALL_DIR_EXPLICIT" -eq 0 ]; then
+    INSTALL_DIR="$(cd "$(dirname "$EXISTING_BIN")" && pwd)"
+  fi
+
+  if [ -n "$CURRENT_VERSION" ] && [ "$CURRENT_VERSION" = "$VERSION" ]; then
+    if [ "$VERSION_EXPLICIT" -eq 1 ]; then
+      ok "istio-viz ${c_bold}${VERSION}${c_reset} is already present → ${EXISTING_BIN}"
+    else
+      ok "istio-viz ${c_bold}${VERSION}${c_reset} is already present and latest → ${EXISTING_BIN}"
+    fi
+    exit 0
+  fi
+
+  if [ -n "$CURRENT_VERSION" ]; then
+    step "Updating ${c_bold}${CURRENT_VERSION}${c_reset} → ${c_bold}${VERSION}${c_reset} at ${INSTALL_DIR}"
+  else
+    step "Existing install at ${EXISTING_BIN}; reinstalling ${c_bold}${VERSION}${c_reset}"
+  fi
+fi
 
 # ── download ──────────────────────────────────────────────────────────────────
 ARCHIVE="istio-viz_${VERSION}_${PLATFORM}.${EXT}"
