@@ -1,0 +1,246 @@
+# Deliberately broken resources — one (or more) per finding ID, isolated in the
+# `staging` namespace so they don't pollute the clean ACME demo above. Render
+# the whole `acme/` directory to see findings on real nodes, or lint just this
+# file:  istio-viz lint testdata/acme/90-lint-findings.yaml
+#
+# Expected findings:
+#   E001  VS references a Gateway not in the input set        -> e001-ghost-gw
+#   E002  Destination host has no matching Service            -> e002-missing-svc
+#   E003  Destination port not exposed / missing on multiport -> e003-bad-port
+#   E004  Subset referenced but not defined in a DR           -> e004-missing-subset
+#   W001  VS hosts have empty intersection with Gateway hosts -> w001-no-intersection
+#   W002  Rule unreachable (shadowed by earlier catch-all)    -> w002-shadowed
+#   W003  Destination weights don't sum to 100                -> w003-bad-weights
+#   W004  Same host on same gateway from multiple VSs         -> w004-a / w004-b
+#   I001  No catch-all rule (unmatched -> 404)                -> i001-no-fallback
+---
+# E001 — gateway "ghost-gateway" does not exist anywhere in the input set.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: e001-ghost-gw
+  namespace: staging
+spec:
+  hosts:
+  - "ghost.acme.com"
+  gateways:
+  - ghost-gateway
+  http:
+  - route:
+    - destination:
+        host: web.prod.svc.cluster.local
+        port:
+          number: 80
+---
+# E002 — destination service "nonexistent-svc" has no backing Service.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: e002-missing-svc
+  namespace: staging
+spec:
+  hosts:
+  - "missing-svc.acme.com"
+  gateways:
+  - istio-system/public-gateway
+  http:
+  - route:
+    - destination:
+        host: nonexistent-svc
+        port:
+          number: 8080
+---
+# E003 — two flavors: a port the Service doesn't expose, and an omitted port on
+# a multi-port Service (api.prod exposes 8080 + 9090).
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: e003-bad-port
+  namespace: staging
+spec:
+  hosts:
+  - "badport.acme.com"
+  gateways:
+  - istio-system/public-gateway
+  http:
+  - name: wrong-port
+    match:
+    - uri:
+        prefix: /wrong
+    route:
+    - destination:
+        host: api.prod.svc.cluster.local
+        port:
+          number: 7777
+  - name: missing-port-on-multiport
+    match:
+    - uri:
+        prefix: /noport
+    route:
+    - destination:
+        host: api.prod.svc.cluster.local
+  - name: fallback
+    route:
+    - destination:
+        host: web.prod.svc.cluster.local
+        port:
+          number: 80
+---
+# E004 — subset "v99" is not defined in the api DestinationRule (v1/v2/v3 only).
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: e004-missing-subset
+  namespace: staging
+spec:
+  hosts:
+  - "badsubset.acme.com"
+  gateways:
+  - istio-system/public-gateway
+  http:
+  - route:
+    - destination:
+        host: api.prod.svc.cluster.local
+        subset: v99
+        port:
+          number: 8080
+---
+# W001 — host has no intersection with any public-gateway host (*.acme.com etc).
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: w001-no-intersection
+  namespace: staging
+spec:
+  hosts:
+  - "unrelated.example.org"
+  gateways:
+  - istio-system/public-gateway
+  http:
+  - route:
+    - destination:
+        host: web.prod.svc.cluster.local
+        port:
+          number: 80
+---
+# W002 — rule #2 (/admin) is unreachable; rule #1 (prefix /) matches first.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: w002-shadowed
+  namespace: staging
+spec:
+  hosts:
+  - "shadow.acme.com"
+  gateways:
+  - istio-system/public-gateway
+  http:
+  - name: catch-all-first
+    match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: web.prod.svc.cluster.local
+        port:
+          number: 80
+  - name: admin-unreachable
+    match:
+    - uri:
+        prefix: /admin
+    route:
+    - destination:
+        host: web.prod.svc.cluster.local
+        port:
+          number: 80
+---
+# W003 — weights sum to 90, not 100.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: w003-bad-weights
+  namespace: staging
+spec:
+  hosts:
+  - "weights.acme.com"
+  gateways:
+  - istio-system/public-gateway
+  http:
+  - name: lopsided-split
+    route:
+    - destination:
+        host: web.prod.svc.cluster.local
+        port:
+          number: 80
+      weight: 50
+    - destination:
+        host: api.prod.svc.cluster.local
+        port:
+          number: 8080
+      weight: 40
+---
+# W004 (part a) — same host on the same gateway as w004-b below.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: w004-a
+  namespace: staging
+spec:
+  hosts:
+  - "conflict.acme.com"
+  gateways:
+  - istio-system/public-gateway
+  http:
+  - name: a-catch-all
+    match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: web.prod.svc.cluster.local
+        port:
+          number: 80
+---
+# W004 (part b) — second VS claiming conflict.acme.com on the same gateway.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: w004-b
+  namespace: staging
+spec:
+  hosts:
+  - "conflict.acme.com"
+  gateways:
+  - istio-system/public-gateway
+  http:
+  - name: b-catch-all
+    match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: api.prod.svc.cluster.local
+        port:
+          number: 8080
+---
+# I001 — binds successfully but has no catch-all rule.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: i001-no-fallback
+  namespace: staging
+spec:
+  hosts:
+  - "nofallback.acme.com"
+  gateways:
+  - istio-system/public-gateway
+  http:
+  - name: only-specific
+    match:
+    - uri:
+        prefix: /only
+    route:
+    - destination:
+        host: web.prod.svc.cluster.local
+        port:
+          number: 80

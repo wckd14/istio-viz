@@ -1,0 +1,98 @@
+# Mesh-internal (east-west) routing — rendered in the "mesh routing" section,
+# not under any gateway. Covers both ways to declare mesh routing:
+#   - explicit `gateways: [mesh]`
+#   - omitted `gateways:` (defaults to mesh)
+# Plus subset routing, fault injection, header-based sticky routing, and a
+# deliberate no-catch-all mesh VS (mesh-level I001).
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: orders-mesh
+  namespace: internal
+spec:
+  hosts:
+  - orders
+  gateways:
+  - mesh
+  http:
+  # Sticky to v2 when an internal experiment header is present.
+  - name: orders-experiment
+    match:
+    - headers:
+        x-experiment:
+          exact: orders-v2
+    route:
+    - destination:
+        host: orders
+        subset: v2
+        port:
+          number: 8080
+  # Default east-west traffic to v1, with a small fault budget for resilience
+  # testing inside the mesh.
+  - name: orders-default
+    fault:
+      abort:
+        httpStatus: 500
+        percentage:
+          value: 0.1
+    route:
+    - destination:
+        host: orders
+        subset: v1
+        port:
+          number: 8080
+---
+# gateways omitted entirely -> mesh routing by default.
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: inventory-mesh
+  namespace: internal
+spec:
+  hosts:
+  - inventory
+  http:
+  - name: inventory-read
+    match:
+    - uri:
+        prefix: /read
+      method:
+        regex: "GET|HEAD"
+    timeout: 1s
+    route:
+    - destination:
+        host: inventory
+        port:
+          number: 8080
+  - name: inventory-write
+    match:
+    - uri:
+        prefix: /write
+      method:
+        exact: POST
+    retries:
+      attempts: 2
+      perTryTimeout: 500ms
+    route:
+    - destination:
+        host: inventory
+        port:
+          number: 8080
+  # NOTE: no catch-all -> mesh-level I001 for internal/inventory-mesh.
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: notifications-mesh
+  namespace: internal
+spec:
+  hosts:
+  - notifications
+  http:
+  - name: notify-default
+    route:
+    - destination:
+        host: notifications
+        port:
+          number: 8080

@@ -1,0 +1,57 @@
+# L4 routing blocks — VirtualServices carrying spec.tcp / spec.tls. The tool
+# lists these under "L4 (not diagrammed)" notes rather than drawing them (v1
+# scope). Useful to show the tool degrades gracefully on L4-only resources.
+#
+# This file is also wrapped in a Kubernetes `List` (the shape of
+# `kubectl get … -o yaml`) to exercise transparent List unwrapping.
+apiVersion: v1
+kind: List
+items:
+# A TCP route block (e.g. a database proxy) on the raw-TCP gateway listener.
+- apiVersion: networking.istio.io/v1
+  kind: VirtualService
+  metadata:
+    name: db-proxy
+    namespace: prod
+  spec:
+    hosts:
+    - "db.acme.com"
+    gateways:
+    - istio-system/edge-l4-gateway
+    tcp:
+    - match:
+      - port: 3306
+      route:
+      - destination:
+          host: orders.internal.svc.cluster.local
+          port:
+            number: 9090
+# A TLS (SNI) route block on the passthrough listener.
+- apiVersion: networking.istio.io/v1
+  kind: VirtualService
+  metadata:
+    name: secure-passthrough
+    namespace: prod
+  spec:
+    hosts:
+    - "secure.acme.com"
+    gateways:
+    - istio-system/edge-l4-gateway
+    tls:
+    - match:
+      - port: 15443
+        sniHosts:
+        - "secure.acme.com"
+      route:
+      - destination:
+          host: payments.payments.svc.cluster.local
+          port:
+            number: 8080
+# A non-network kind inside the List — must be dropped silently, not warned.
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: ignore-me
+    namespace: prod
+  spec:
+    replicas: 1

@@ -1,0 +1,272 @@
+# Web storefront routing on acme.com / www.acme.com / shop.acme.com.
+#
+# Coverage in this file:
+#   - http -> https redirect (301) on the :80 listener
+#   - exact / prefix / regex URI matches (regex flagged distinctly)
+#   - ignoreUriCase
+#   - method, header (exact/prefix/regex/presence), withoutHeaders
+#   - queryParams (exact/regex/presence)
+#   - weighted split (sums to 100) with subset routing
+#   - rewrite (uri), rewrite (uriRegexRewrite), redirect, directResponse
+#   - timeout, retries (attempts/perTryTimeout/retryOn), fault (delay+abort)
+#   - mirror with mirrorPercentage, request/response header manipulation, CORS
+#   - wildcard-host VirtualService (*.acme.com tenant routing)
+#   - explicit catch-all so no I001 is raised for the main storefront
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: apex-redirect
+  namespace: prod
+spec:
+  # Apex domain redirects to the canonical www host (kept on its own host so it
+  # doesn't collide with the storefront VS on the same gateway).
+  hosts:
+  - "acme.com"
+  gateways:
+  - istio-system/public-gateway
+  http:
+  - name: apex-to-www
+    match:
+    - uri:
+        prefix: /
+    redirect:
+      uri: /
+      authority: www.acme.com
+      scheme: https
+      redirectCode: 301
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: storefront
+  namespace: prod
+spec:
+  hosts:
+  - "www.acme.com"
+  gateways:
+  - istio-system/public-gateway
+  http:
+  # 1) Health probe — exact match, terminal direct response (no upstream).
+  - name: healthz
+    match:
+    - uri:
+        exact: /healthz
+    directResponse:
+      status: 200
+      body:
+        string: "ok"
+
+  # 2) Legacy path permanently moved — exact match -> 301 redirect.
+  - name: legacy-home
+    match:
+    - uri:
+        exact: /home
+    redirect:
+      uri: /
+      redirectCode: 301
+
+  # 3) Static assets — prefix match, rewrite to root of the assets service,
+  #    long browser-cache timeout, response header injection.
+  - name: assets
+    match:
+    - uri:
+        prefix: /assets
+    rewrite:
+      uri: /
+    timeout: 3s
+    headers:
+      response:
+        set:
+          cache-control: "public, max-age=31536000"
+    route:
+    - destination:
+        host: static-assets
+        port:
+          number: 80
+
+  # 4) Canary split on the homepage app — 90/10 across web subsets, retries.
+  - name: web-canary-split
+    match:
+    - uri:
+        prefix: /shop
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+      retryOn: 5xx,gateway-error,connect-failure
+    route:
+    - destination:
+        host: web
+        subset: stable
+        port:
+          number: 80
+      weight: 90
+    - destination:
+        host: web
+        subset: canary
+        port:
+          number: 80
+      weight: 10
+
+  # 5) Search — regex URI + query-param matches (exact, regex, presence) and a
+  #    case-insensitive header presence check; mirrors a copy to recommendations.
+  - name: search
+    match:
+    - uri:
+        regex: "/search/[a-z0-9-]+"
+      queryParams:
+        q:
+          regex: ".+"
+        page:
+          exact: "1"
+        debug: {}
+      ignoreUriCase: true
+    route:
+    - destination:
+        host: search
+        port:
+          number: 8080
+    mirror:
+      host: recommendations
+      port:
+        number: 8080
+    mirrorPercentage:
+      value: 25
+
+  # 6) Beta program — multiple OR match blocks: header regex OR a cookie header
+  #    prefix; excludes opted-out users via withoutHeaders; fault injection for
+  #    chaos testing; CORS policy attached.
+  - name: beta-experience
+    match:
+    - headers:
+        x-acme-channel:
+          regex: "beta|canary"
+      withoutHeaders:
+        x-opt-out: {}
+    - headers:
+        cookie:
+          prefix: "acme_beta="
+    corsPolicy:
+      allowOrigins:
+      - exact: https://www.acme.com
+      allowMethods: [GET, POST, OPTIONS]
+      allowHeaders: [authorization, content-type]
+      maxAge: 24h
+    fault:
+      delay:
+        fixedDelay: 5s
+        percentage:
+          value: 1
+      abort:
+        httpStatus: 503
+        percentage:
+          value: 0.5
+    route:
+    - destination:
+        host: web
+        subset: canary
+        port:
+          number: 80
+
+  # 7) Account area — method-restricted (GET/HEAD via regex) with request
+  #    header manipulation, rewrite via uriRegexRewrite.
+  - name: account
+    match:
+    - uri:
+        prefix: /account
+      method:
+        regex: "GET|HEAD"
+    rewrite:
+      uriRegexRewrite:
+        match: "^/account(/.*)?$"
+        rewrite: "/u\\1"
+    headers:
+      request:
+        add:
+          x-acme-edge: "public-gateway"
+        remove:
+        - x-internal-debug
+    route:
+    - destination:
+        host: web
+        subset: stable
+        port:
+          number: 80
+
+  # 8) Catch-all — prefix / sends the rest to the stable storefront.
+  - name: fallback
+    match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: web
+        subset: stable
+        port:
+          number: 80
+---
+# Wildcard-host tenant routing: binds to the *.acme.com listener but scopes
+# itself to the dedicated *.tenants.acme.com subdomain space so it doesn't
+# overlap the apex/www/api hosts on the same gateway.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: tenant-sites
+  namespace: prod
+spec:
+  hosts:
+  - "*.tenants.acme.com"
+  gateways:
+  - istio-system/public-gateway
+  http:
+  - name: tenant-home
+    match:
+    - uri:
+        prefix: /app
+      authority:
+        regex: "[a-z0-9-]+\\.tenants\\.acme\\.com"
+    route:
+    - destination:
+        host: web
+        subset: stable
+        port:
+          number: 80
+  - name: tenant-default
+    route:
+    - destination:
+        host: web
+        subset: stable
+        port:
+          number: 80
+---
+# ns-qualified-host demo: the public-gateway :8080 server only admits prod VSs
+# for internal.acme.com. This prod VS therefore binds; a same-host VS in another
+# namespace would not.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: internal-portal
+  namespace: prod
+spec:
+  hosts:
+  - "internal.acme.com"
+  gateways:
+  - istio-system/public-gateway
+  http:
+  - name: portal
+    match:
+    - uri:
+        prefix: /
+      sourceLabels:
+        team: platform
+    route:
+    - destination:
+        host: internal-portal
+        port:
+          number: 8080
+  - name: portal-default
+    route:
+    - destination:
+        host: internal-portal
+        port:
+          number: 8080

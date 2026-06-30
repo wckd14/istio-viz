@@ -1,0 +1,117 @@
+# ACME platform — ingress gateways.
+#
+# Exercises: multiple listeners per gateway, every protocol the tool treats as
+# L7 (HTTP/HTTPS/HTTP2/GRPC), every TLS mode (SIMPLE/MUTUAL/PASSTHROUGH), the
+# "ns/host" gateway-host qualifier, wildcard hosts, and two non-HTTP listeners
+# (TLS PASSTHROUGH + raw TCP) that must surface as "L4 (not diagrammed)" notes.
+# Mixed apiVersions across the file (v1, v1beta1, v1alpha3) must all parse.
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: public-gateway
+  namespace: istio-system
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  # Primary HTTPS listener serving the apex + every subdomain.
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: acme-com-cert
+    hosts:
+    - "acme.com"
+    - "www.acme.com"
+    - "*.acme.com"
+  # Plain HTTP listener — used only to demonstrate the http->https redirect VS.
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "acme.com"
+    - "www.acme.com"
+    - "*.acme.com"
+  # ns-qualified host: only VirtualServices in namespace `prod` may attach here.
+  - port:
+      number: 8080
+      name: http-internal
+      protocol: HTTP
+    hosts:
+    - "prod/internal.acme.com"
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: api-gateway
+  namespace: istio-system
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  # Mutual-TLS API edge.
+  - port:
+      number: 443
+      name: https-api
+      protocol: HTTPS
+    tls:
+      mode: MUTUAL
+      credentialName: api-acme-com-cert
+    hosts:
+    - "api.acme.com"
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: grpc-gateway
+  namespace: istio-system
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  # HTTP/2 + gRPC listeners are L7 and must bind normally.
+  - port:
+      number: 8443
+      name: grpc-tls
+      protocol: GRPC
+    tls:
+      mode: SIMPLE
+      credentialName: grpc-acme-com-cert
+    hosts:
+    - "grpc.acme.com"
+  - port:
+      number: 9090
+      name: h2c
+      protocol: HTTP2
+    hosts:
+    - "stream.acme.com"
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: edge-l4-gateway
+  namespace: istio-system
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  # TLS PASSTHROUGH — not HTTP, expect an L4 note (http routes won't bind).
+  - port:
+      number: 15443
+      name: tls-passthrough
+      protocol: TLS
+    tls:
+      mode: PASSTHROUGH
+    hosts:
+    - "secure.acme.com"
+  # Raw TCP (database proxy) — also an L4 note.
+  - port:
+      number: 3306
+      name: mysql
+      protocol: TCP
+    hosts:
+    - "db.acme.com"

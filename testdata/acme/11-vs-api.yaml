@@ -1,0 +1,127 @@
+# API edge routing on api.acme.com (mutual-TLS gateway).
+#
+# Coverage: versioned API canary with AND-combined conditions (prefix + header
+# exact), weighted blue/green split, mirror to a shadow service, cross-namespace
+# destination (payments.payments), scheme/port match conditions, retries +
+# timeout, and an intentional non-catch-all tail (raises I001 — a realistic
+# "did you forget a default?" demo).
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: api-routes
+  namespace: prod
+spec:
+  hosts:
+  - "api.acme.com"
+  gateways:
+  - istio-system/api-gateway
+  http:
+  # 1) v2 canary: prefix /v2 AND a canary header AND POST — most specific first.
+  - name: api-v2-canary
+    match:
+    - uri:
+        prefix: /v2
+      headers:
+        x-canary:
+          exact: "true"
+      method:
+        exact: POST
+    timeout: 5s
+    retries:
+      attempts: 3
+      perTryTimeout: 1s
+      retryOn: 5xx,reset
+    route:
+    - destination:
+        host: api
+        subset: v2
+        port:
+          number: 8080
+      weight: 80
+    - destination:
+        host: api
+        subset: v3
+        port:
+          number: 8080
+      weight: 20
+    mirror:
+      host: api-shadow
+      port:
+        number: 8080
+
+  # 2) Cart service — header presence + scheme match. More specific than the
+  #    generic /v2 rule below, so it is ordered first.
+  - name: cart
+    match:
+    - uri:
+        prefix: /v2/cart
+      scheme:
+        exact: https
+      headers:
+        authorization: {}
+    route:
+    - destination:
+        host: cart
+        port:
+          number: 8080
+
+  # 3) Catalog with query-param routing.
+  - name: catalog
+    match:
+    - uri:
+        prefix: /v2/catalog
+      queryParams:
+        category:
+          regex: ".+"
+    route:
+    - destination:
+        host: catalog
+        port:
+          number: 8080
+
+  # 4) Payments — cross-namespace FQDN destination + subset, port match guard.
+  - name: payments
+    match:
+    - uri:
+        prefix: /v2/payments
+      port: 443
+    route:
+    - destination:
+        host: payments.payments.svc.cluster.local
+        subset: v2
+        port:
+          number: 8080
+
+  # 5) Everything else under /v2 -> stable v1, with a shadow mirror. Generic
+  #    prefix, so it sits after the specific /v2/* rules above.
+  - name: api-v2
+    match:
+    - uri:
+        prefix: /v2
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: api
+        subset: v1
+        port:
+          number: 8080
+    mirror:
+      host: api-shadow
+      port:
+        number: 8080
+    mirrorPercentage:
+      value: 10
+
+  # 6) Deprecated v1 surface -> redirect to /v2.
+  - name: api-v1-gone
+    match:
+    - uri:
+        prefix: /v1
+    redirect:
+      uri: /v2
+      redirectCode: 302
+
+  # NOTE: deliberately NO catch-all here — expect an I001 info finding for
+  # prod/api-routes (unmatched requests 404). Good talking point in a demo.

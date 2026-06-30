@@ -1,0 +1,67 @@
+# DestinationRules defining the subsets the VirtualServices route to.
+# Subset labels show up in the destination side-panel; any subset referenced by
+# a VS but missing here would raise E004 (see 90-lint-findings.yaml).
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: api
+  namespace: prod
+spec:
+  host: api
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+  subsets:
+  - name: v1
+    labels: { version: v1 }
+  - name: v2
+    labels: { version: v2 }
+  - name: v3
+    labels: { version: v3 }
+    trafficPolicy:
+      connectionPool:
+        http:
+          http2MaxRequests: 1000
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: web
+  namespace: prod
+spec:
+  host: web
+  subsets:
+  - name: stable
+    labels: { track: stable }
+  - name: canary
+    labels: { track: canary }
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: payments
+  namespace: payments
+spec:
+  host: payments
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+  subsets:
+  - name: v1
+    labels: { version: v1 }
+  - name: v2
+    labels: { version: v2 }
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: orders
+  namespace: internal
+spec:
+  host: orders
+  subsets:
+  - name: v1
+    labels: { version: v1 }
+  - name: v2
+    labels: { version: v2 }

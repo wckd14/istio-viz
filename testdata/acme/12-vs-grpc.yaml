@@ -1,0 +1,52 @@
+# gRPC / HTTP2 routing — binds to the GRPC (8443) and HTTP2 (9090) listeners.
+# Demonstrates that GRPC/HTTP2 protocols are treated as L7 and bind normally,
+# plus gRPC-style method routing via URI prefix (/package.Service/Method).
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: grpc-routes
+  namespace: prod
+spec:
+  hosts:
+  - "grpc.acme.com"
+  gateways:
+  - istio-system/grpc-gateway
+  http:
+  - name: orders-rpc
+    match:
+    - uri:
+        prefix: /acme.orders.v1.Orders/
+    timeout: 10s
+    retries:
+      attempts: 2
+      retryOn: cancelled,deadline-exceeded,unavailable
+    route:
+    - destination:
+        host: api
+        port:
+          number: 9090
+  - name: grpc-default
+    route:
+    - destination:
+        host: api
+        port:
+          number: 9090
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: stream-routes
+  namespace: prod
+spec:
+  hosts:
+  - "stream.acme.com"
+  gateways:
+  - istio-system/grpc-gateway
+  http:
+  - name: stream-default
+    route:
+    - destination:
+        host: stream
+        port:
+          number: 9090
