@@ -68,7 +68,7 @@ test("trace: falls back to mesh routing for cluster-internal hosts", () => {
 });
 
 test("trace: merges all VirtualServices bound to the same host+gateway (first-match-wins across VS)", () => {
-  // Mirrors the real-world citi-stage case: VS #1 ("a-gateway") only matches a
+  // Mirrors the real-world case: VS #1 ("a-gateway") only matches a
   // different authority, so a request must fall through to VS #2's catch-all
   // rather than 404'ing inside the first VS. File names order the load so
   // a-gateway binds before b-fallback.

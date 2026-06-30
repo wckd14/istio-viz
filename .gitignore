@@ -7,3 +7,4 @@ release/
 *.txt
 *.yaml
 !testdata/**
+!site/**

@@ -1,0 +1,23 @@
+<svg width="160" height="36" viewBox="0 0 160 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .word { fill: #1A2B3C; }
+    .accent { fill: #1A8F85; }
+    .edge { stroke: #1A8F85; }
+    @media (prefers-color-scheme: dark) {
+      .word { fill: #E2EAF2; }
+      .accent { fill: #28A89E; }
+      .edge { stroke: #28A89E; }
+    }
+  </style>
+  <g class="edge" stroke-width="2.5" stroke-linecap="round">
+    <line x1="16" y1="6" x2="4" y2="28"/>
+    <line x1="16" y1="6" x2="28" y2="28"/>
+    <line x1="4" y1="28" x2="28" y2="28"/>
+  </g>
+  <g class="accent">
+    <circle cx="16" cy="6" r="4"/>
+    <circle cx="4" cy="28" r="4"/>
+    <circle cx="28" cy="28" r="4"/>
+  </g>
+  <text x="40" y="25" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="20" font-weight="500" letter-spacing="-0.4" class="word">istio<tspan class="accent">-viz</tspan></text>
+</svg>
