@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>istio-viz — Istio routing, visualized</title>
+  <title>istio-viz — Visualize Istio Routing &amp; VirtualService Topology</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="canonical" href="https://istio-viz.wckd14.xyz/">
+  <meta name="theme-color" content="#1A8F85" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#101C28" media="(prefers-color-scheme: dark)">
   <script>
     (function(){
       var s=localStorage.getItem('iv-theme');
@@ -13,6 +16,40 @@
     })();
   </script>
   <meta name="description" content="CLI tool that renders your Istio service mesh routing as interactive diagrams. Trace requests, lint configs, and watch for changes — offline against local manifests, or live from your cluster via kubectl.">
+  <meta name="keywords" content="istio, istio routing, virtualservice, istio gateway, destinationrule, service mesh, envoy, kubernetes, routing visualization, istio diagram, l7 routing">
+
+  <!-- Open Graph / social preview -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="istio-viz">
+  <meta property="og:url" content="https://istio-viz.wckd14.xyz/">
+  <meta property="og:title" content="istio-viz — Visualize Istio Routing & VirtualService Topology">
+  <meta property="og:description" content="Render your Istio service mesh L7 routing as interactive diagrams. Trace requests, lint configs, watch for changes — offline or live from your cluster.">
+  <meta property="og:image" content="https://istio-viz.wckd14.xyz/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+
+  <!-- Twitter / X card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="istio-viz — Visualize Istio Routing & VirtualService Topology">
+  <meta name="twitter:description" content="Visualize Istio L7 routing topology from your manifests or a live cluster. Trace requests, lint configs, watch for changes.">
+  <meta name="twitter:image" content="https://istio-viz.wckd14.xyz/og.png">
+
+  <!-- Structured data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "istio-viz",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "macOS, Linux",
+    "description": "CLI tool that visualizes the effective Istio L7 routing topology from Kubernetes/Istio manifests (Gateway, VirtualService, Service, DestinationRule) or a live cluster, with request tracing, config linting, and a live watch server.",
+    "url": "https://istio-viz.wckd14.xyz/",
+    "downloadUrl": "https://istio-viz.wckd14.xyz/install.sh",
+    "softwareVersion": "0.1.0",
+    "license": "https://github.com/wckd14/istio-viz/blob/main/LICENSE",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+  }
+  </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
