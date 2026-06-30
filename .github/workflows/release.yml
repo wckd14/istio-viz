@@ -26,8 +26,22 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: Stamp version from tag
+        shell: bash
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
       - run: npm run build
       - run: npm run bundle
+
+      - name: Verify stamped version matches tag
+        shell: bash
+        run: |
+          expected="${GITHUB_REF_NAME#v}"
+          actual="$(node dist/bundle.cjs --version)"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::Version mismatch — bundle reports '$actual' but tag is '$expected'" >&2
+            exit 1
+          fi
+          echo "Verified istio-viz reports version $actual"
 
       - name: Package (Unix)
         if: runner.os != 'Windows'

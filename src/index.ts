@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /** istio-viz CLI: render | trace | lint */
 import * as fs from "node:fs";
+import { createRequire } from "node:module";
 import { Command } from "commander";
 import { loadPaths } from "./loader.js";
 import { fetchFromCluster, mergeClusterIntoFiles, type ClusterOpts } from "./cluster.js";
@@ -15,11 +16,25 @@ import { renderHtml } from "./render/html.js";
 import { startWatchServer } from "./watch.js";
 import type { RoutingModel, TraceRequest } from "./types.js";
 
+// Version is stamped at bundle time via esbuild `--define` (see scripts/bundle.mjs).
+// In dev (tsx) and locally-linked builds it falls back to package.json, then a dev marker.
+declare const __ISTIO_VIZ_VERSION__: string | undefined;
+function resolveVersion(): string {
+  if (typeof __ISTIO_VIZ_VERSION__ === "string" && __ISTIO_VIZ_VERSION__.length > 0) {
+    return __ISTIO_VIZ_VERSION__;
+  }
+  try {
+    return createRequire(import.meta.url)("../package.json").version as string;
+  } catch {
+    return "0.0.0-dev";
+  }
+}
+
 const program = new Command();
 program
   .name("istio-viz")
   .description("Visualize effective Istio L7 routing from Gateway/VirtualService/Service/DestinationRule manifests")
-  .version("0.1.0");
+  .version(resolveVersion());
 
 program
   .command("render")

@@ -1,6 +1,6 @@
 {
   "name": "istio-viz",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "description": "Visualize effective Istio L7 routing topology from Gateway/VirtualService/Service/DestinationRule manifests",
   "license": "MIT",
   "author": "wckd14",
@@ -10,7 +10,15 @@
   },
   "homepage": "https://github.com/wckd14/istio-viz#readme",
   "bugs": "https://github.com/wckd14/istio-viz/issues",
-  "keywords": ["istio", "kubernetes", "service-mesh", "visualization", "routing", "virtualservice", "gateway"],
+  "keywords": [
+    "istio",
+    "kubernetes",
+    "service-mesh",
+    "visualization",
+    "routing",
+    "virtualservice",
+    "gateway"
+  ],
   "type": "module",
   "bin": {
     "istio-viz": "dist/index.js"
@@ -23,7 +31,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "bundle": "esbuild dist/index.js --bundle --platform=node --outfile=dist/bundle.cjs --format=cjs --external:@resvg/resvg-js",
+    "bundle": "node scripts/bundle.mjs",
     "test": "tsc --noEmit && node --import tsx --test \"test/**/*.test.ts\"",
     "dev": "node --import tsx src/index.ts"
   },
