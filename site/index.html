@@ -525,6 +525,92 @@
     .lf-loc { color: #3E5A74; }
     .lf-msg { color: #8AABCC; }
 
+    /* ── LIVE DEMO ── */
+    .demo {
+      padding: 104px 28px;
+      background: var(--bg);
+    }
+    .demo .section-header { text-align: center; margin-bottom: 40px; }
+    .demo .section-sub { margin-left: auto; margin-right: auto; }
+
+    .demo-frame {
+      max-width: var(--max);
+      margin: 0 auto;
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      overflow: hidden;
+      box-shadow: 0 16px 48px rgba(20, 40, 60, 0.16), 0 4px 16px rgba(20, 40, 60, 0.1);
+      background: var(--surface);
+    }
+
+    .demo-chrome {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .demo-chrome .term-dot { width: 12px; height: 12px; border-radius: 50%; }
+
+    .demo-url {
+      margin: 0 auto;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 3px 16px;
+      border-radius: 20px;
+      max-width: 70%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .demo-iframe {
+      display: block;
+      width: 100%;
+      height: 660px;
+      border: 0;
+      background: var(--surface);
+    }
+
+    .demo-actions {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 18px;
+      margin-top: 24px;
+      flex-wrap: wrap;
+    }
+
+    .demo-note {
+      text-align: center;
+      margin-top: 14px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    /* mobile fallback — hidden on desktop, shown when the iframe is too cramped */
+    .demo-mobile { display: none; }
+    .demo-mobile-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      max-width: 440px;
+      margin: 0 auto;
+      text-align: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: 40px 28px;
+      box-shadow: 0 8px 28px rgba(26, 43, 60, 0.08);
+    }
+    .demo-mobile-card p { color: var(--muted); font-size: 0.9rem; line-height: 1.6; }
+
     /* ── INSTALL ── */
     .install {
       padding: 104px 28px;
@@ -599,7 +685,7 @@
       .steps::before { display: none; }
       .steps { grid-template-columns: 1fr; gap: 40px; }
       .step + .step { border-left: none; border-top: 1px solid var(--border); padding-top: 40px; padding-left: 0; }
-      .features, .how-it-works, .install { padding: 80px 28px; }
+      .features, .how-it-works, .install, .demo { padding: 80px 28px; }
       .lint-section { padding: 64px 28px; }
     }
 
@@ -608,6 +694,8 @@
       .hero-visual { max-width: 540px; width: 100%; margin: 0 auto; }
       .hero { padding: 64px 28px 72px; }
       .section-header { margin-bottom: 40px; }
+      .demo-frame { display: none; }
+      .demo-mobile { display: block; }
     }
 
     @media (max-width: 560px) {
@@ -616,7 +704,7 @@
       .nav-inner { padding: 0 18px; gap: 16px; }
       .nav-links { gap: 14px; }
       .hero { padding: 48px 18px 60px; }
-      .features, .how-it-works, .install { padding: 64px 18px; }
+      .features, .how-it-works, .install, .demo { padding: 64px 18px; }
       .lint-section { padding: 56px 18px; }
       footer { padding: 28px 18px; }
       .hero-sub { font-size: 1rem; }
@@ -733,6 +821,7 @@
     <div class="nav-links">
       <a href="#features">Features</a>
       <a href="#how-it-works">How it works</a>
+      <a href="#demo">Demo</a>
       <a href="#install">Install</a>
       <a href="https://github.com/wckd14/istio-viz" target="_blank" rel="noopener">GitHub</a>
       <a href="#install" class="nav-install">↓ Install</a>
@@ -978,6 +1067,51 @@ Hosts → RouteRules → Destinations</div>
         <div><span class="lf-err">2 errors, 1 warning — exiting 1</span></div>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ═══ LIVE DEMO ═══ -->
+<section class="demo" id="demo" aria-labelledby="demo-heading">
+  <div class="section-inner">
+    <div class="section-header">
+      <p class="section-eyebrow">See it in action</p>
+      <h2 id="demo-heading">A real report, right here.</h2>
+      <p class="section-sub">This is genuine <code style="font-family:ui-monospace,monospace;font-size:0.9em">istio-viz</code> output from a sample acme.com mesh — hover a route to highlight its path, click any node for the underlying YAML, and follow the traced <code style="font-family:ui-monospace,monospace;font-size:0.9em">POST /v2/orders</code> canary request. Nothing is faked; it's the same self-contained HTML the CLI writes.</p>
+    </div>
+
+    <div class="demo-frame">
+      <div class="demo-chrome" aria-hidden="true">
+        <span class="term-dot dot-r"></span>
+        <span class="term-dot dot-y"></span>
+        <span class="term-dot dot-g"></span>
+        <span class="demo-url">routes.html — istio-viz trace · api.acme.com</span>
+      </div>
+      <iframe
+        class="demo-iframe"
+        src="demo.html"
+        title="Interactive istio-viz routing report for a sample acme.com mesh"
+        loading="lazy"
+        width="1160"
+        height="660"
+        referrerpolicy="no-referrer"></iframe>
+    </div>
+
+    <div class="demo-mobile">
+      <div class="demo-mobile-card">
+        <p>The interactive report is dense — best viewed on a larger screen. Open the full demo in a new tab to explore it.</p>
+        <a href="demo.html" class="cta-primary" target="_blank" rel="noopener">
+          Open live demo
+          <svg width="14" height="14" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+            <path d="M5.5 2.5h7v7M12.5 2.5l-9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </a>
+      </div>
+    </div>
+
+    <div class="demo-actions">
+      <a href="demo.html" class="cta-ghost" target="_blank" rel="noopener">Open full demo in a new tab →</a>
+    </div>
+    <p class="demo-note">$ istio-viz trace ./manifests/ --host api.acme.com --path /v2/orders --method POST --header x-canary=true -o routes.html</p>
   </div>
 </section>
 

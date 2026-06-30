@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20width%3D%2264%22%20height%3D%2264%22%20viewBox%3D%220%200%2064%2064%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20stroke%3D%22%231A8F85%22%20stroke-width%3D%224%22%20stroke-linecap%3D%22round%22%3E%3Cline%20x1%3D%2232%22%20y1%3D%2214%22%20x2%3D%2212%22%20y2%3D%2248%22%2F%3E%3Cline%20x1%3D%2232%22%20y1%3D%2214%22%20x2%3D%2252%22%20y2%3D%2248%22%2F%3E%3Cline%20x1%3D%2212%22%20y1%3D%2248%22%20x2%3D%2252%22%20y2%3D%2248%22%2F%3E%3C%2Fg%3E%3Cg%20fill%3D%22%231A8F85%22%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2214%22%20r%3D%227%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2248%22%20r%3D%227%22%2F%3E%3Ccircle%20cx%3D%2252%22%20cy%3D%2248%22%20r%3D%227%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E">
+<title>istio-viz — trace</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px ui-sans-serif, system-ui, sans-serif; background: #f8fafc; color: #0f172a; }
+  header { position: sticky; top: 0; z-index: 10; background: #fff; border-bottom: 1px solid #e2e8f0;
+           padding: 8px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  header h1 { margin: 0; display: flex; align-items: center; }
+  header h1 .brand-logo { height: 22px; width: auto; display: block; }
+  header label { font-size: 12px; color: #475569; display: flex; gap: 5px; align-items: center; }
+  header select, header input[type=text] { font: 12px ui-monospace, monospace; padding: 3px 6px;
+           border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; }
+  main { display: grid; grid-template-columns: 1fr 380px; gap: 0; }
+  body.aside-hidden main { grid-template-columns: 1fr 12px; }
+  body.aside-hidden aside { display: none; }
+  #aside-wrap { position: sticky; top: 41px; height: calc(100vh - 41px); overflow: visible;
+                border-left: 1px solid #e2e8f0; }
+  #toggle-aside { position: absolute; left: -12px; top: 50%; transform: translateY(-50%);
+                  width: 24px; height: 24px; border-radius: 50%; border: 1px solid #cbd5e1;
+                  background: #fff; cursor: pointer; display: flex; align-items: center;
+                  justify-content: center; z-index: 20;
+                  box-shadow: -1px 1px 4px rgba(0,0,0,.12); padding: 0; color: #64748b; }
+  #toggle-aside:hover { background: #f1f5f9; color: #4f46e5; border-color: #a5b4fc; }
+  #left { min-width: 0; }
+  #diagrams { padding: 14px 16px; overflow-x: auto; min-width: 0; }
+  /* view switcher */
+  .viewsw button { font: 12px ui-sans-serif, system-ui; border: 1px solid #cbd5e1; background: #fff;
+                   padding: 3px 10px; cursor: pointer; }
+  .viewsw button:first-child { border-radius: 5px 0 0 5px; }
+  .viewsw button:last-child { border-radius: 0 5px 5px 0; border-left: none; }
+  .viewsw button.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+  /* paths view */
+  #paths-view { display: none; padding: 14px 16px; }
+  body.paths-mode #diagrams { display: none; }
+  body.paths-mode #paths-view { display: block; }
+  .paths-toolbar { margin-bottom: 10px; }
+  #paths-table { display: none; }
+  #paths-view.mode-table #paths-table { display: block; }
+  #paths-view.mode-table #paths-graph { display: none; }
+  .pgroup-g { margin-bottom: 14px; }
+  .pgroup-g.hidden { display: none; }
+  .pgroup { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
+  .pgroup.hidden { display: none; }
+  .pgroup h3 { margin: 0 0 2px; font-size: 14px; font-family: ui-monospace, monospace; }
+  .pgroup .via { font: 11px ui-monospace, monospace; color: #94a3b8; margin-bottom: 6px; }
+  .pgroup table { border-collapse: collapse; width: 100%; }
+  .pgroup tr[data-rule] { cursor: pointer; }
+  .pgroup tr[data-rule]:hover { background: #f1f5f9; }
+  .pgroup tr.hidden { display: none; }
+  .pgroup td { padding: 3px 10px 3px 0; font: 12px ui-monospace, monospace; vertical-align: top; }
+  .pgroup td.pmatch { color: #92400e; white-space: nowrap; }
+  .pgroup td.parrow { color: #94a3b8; }
+  .pgroup td.pdests { color: #0c4a6e; }
+  .pgroup td.pdests .missing { color: #dc2626; font-weight: 700; }
+  .pgroup td.pmods { color: #64748b; }
+  .diagram-section { margin-bottom: 22px; }
+  .diagram-section h2 { font-size: 14px; margin: 0 0 6px; color: #334155; cursor: pointer; user-select: none; }
+  .diagram-section h2 .chev { display: inline-block; width: 16px; color: #94a3b8; transition: transform .12s; }
+  .diagram-section.collapsed h2 .chev { transform: rotate(-90deg); }
+  .diagram-section.collapsed .svg-wrap { display: none; }
+  .diagram-section h2 .count { margin-left: 10px; font-weight: 400; font-size: 12px; color: #94a3b8; }
+  .diagram-section.hidden { display: none; }
+  .zoom { display: flex; gap: 4px; align-items: center; margin-left: auto; }
+  .zoom button { font: 12px ui-monospace, monospace; border: 1px solid #cbd5e1; background: #fff;
+                 border-radius: 5px; padding: 2px 8px; cursor: pointer; }
+  .zoom button:hover { background: #f1f5f9; }
+  .zoom #z-pct { font: 12px ui-monospace, monospace; color: #475569; min-width: 42px; text-align: center; }
+  .svg-wrap { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; overflow-x: auto; }
+  aside { background: #fff; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+  #findings-section { flex: 1; overflow-y: auto; min-height: 0; padding: 14px; }
+  #details-section { flex-shrink: 0; border-top: 1px solid #e2e8f0; padding: 10px 14px 14px;
+                     max-height: 45%; overflow-y: auto; }
+  aside h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
+  #panel { font-size: 13px; }
+  #panel .ptitle { font-weight: 700; font-size: 14px; margin-bottom: 6px; word-break: break-all; }
+  #panel table { border-collapse: collapse; width: 100%; margin: 6px 0; }
+  #panel td { padding: 2px 6px 2px 0; vertical-align: top; font-size: 12px; }
+  #panel td:first-child { color: #64748b; white-space: nowrap; }
+  #panel pre { background: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 8px; font-size: 11px;
+               overflow-x: auto; max-height: 320px; white-space: pre; }
+  #panel .loc { font: 11px ui-monospace, monospace; color: #64748b; }
+  .finding { list-style: none; padding: 6px 8px; margin: 4px 0; border-radius: 6px; font-size: 12px; cursor: pointer; }
+  .finding.error { background: #fef2f2; border-left: 3px solid #dc2626; }
+  .finding.warn { background: #fffbeb; border-left: 3px solid #f59e0b; }
+  .finding.info { background: #eff6ff; border-left: 3px solid #3b82f6; }
+  .finding .fid { font-weight: 700; font-family: ui-monospace, monospace; }
+  .finding .floc { display: block; color: #94a3b8; font-family: ui-monospace, monospace; font-size: 11px; }
+  ul#findings { padding: 0; margin: 0 0 16px; }
+  .l4 { font-size: 12px; color: #64748b; margin-bottom: 14px; }
+  .trace-log { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px;
+               font: 12px ui-monospace, monospace; margin-bottom: 14px; }
+  .trace-log .skip { color: #b91c1c; }
+  .trace-log .win { color: #15803d; font-weight: 700; }
+  
+  .node rect { fill: #fff; stroke: #94a3b8; stroke-width: 1.2; rx: 6; }
+  .node.client rect { fill: #f1f5f9; stroke: #64748b; }
+  .node.listener rect { fill: #eef2ff; stroke: #6366f1; }
+  .node.host rect { fill: #ecfdf5; stroke: #10b981; }
+  .node.rule rect { fill: #fffbeb; stroke: #f59e0b; }
+  .node.dest rect { fill: #f0f9ff; stroke: #0ea5e9; }
+  .node.dest.terminal rect { fill: #faf5ff; stroke: #a855f7; stroke-dasharray: 4 2; }
+  .node.dest.missing rect { stroke: #dc2626; stroke-width: 1.6; }
+  .node.unreachable { opacity: 0.45; }
+  .node text { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #0f172a; }
+  .node text.title { font-weight: 700; }
+  .node text.sub { fill: #475569; }
+  .node text.dim { fill: #94a3b8; }
+  .node text.or { fill: #9333ea; font-weight: 700; font-size: 9px; }
+  .node text.match {}
+  .node text.regex { fill: #be185d; font-style: italic; }
+  .node text.badge { fill: #92400e; font-size: 10px; }
+  .node text.err { fill: #dc2626; font-weight: 700; }
+  .badge-circle { fill: #f59e0b; }
+  .badge-text { font: 700 10px ui-monospace, monospace; fill: #fff; }
+  .edge { fill: none; stroke: #94a3b8; stroke-width: 1.3; }
+  .edge.mirrors { stroke-dasharray: 5 3; stroke: #a855f7; }
+  .edge-label { font: 9.5px ui-monospace, monospace; fill: #475569; }
+  .edge-label.mirrors { fill: #a855f7; }
+  .arrow { fill: #94a3b8; }
+  .finding-dot { stroke: #fff; stroke-width: 1; }
+  .finding-dot.error { fill: #dc2626; }
+  .finding-dot.warn { fill: #f59e0b; }
+  .finding-dot.info { fill: #3b82f6; }
+  .trace-win rect { stroke: #16a34a !important; stroke-width: 2.5 !important; }
+  .edge.trace-win { stroke: #16a34a; stroke-width: 2.5; }
+  .trace-skip { opacity: 0.5; }
+  .trace-skip rect { stroke-dasharray: 3 3; }
+
+  .node { cursor: pointer; }
+  .node.hl rect { stroke-width: 2.4; filter: drop-shadow(0 0 3px rgba(99,102,241,.6)); }
+  .fade { opacity: 0.18; }
+  .filter-fade { opacity: 0.12; }
+  .node.selected rect { stroke: #4f46e5 !important; stroke-width: 2.6 !important; }
+  body.warnonly #diagrams .node:not(.has-finding):not(.trace-win) { opacity: .18; }
+  .empty { color: #94a3b8; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><svg class="brand-logo" width="32" height="30" viewBox="0 2 32 30" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="istio-viz"><g stroke="#1A8F85" stroke-width="2.5" stroke-linecap="round"><line x1="16" y1="6" x2="4" y2="28"/><line x1="16" y1="6" x2="28" y2="28"/><line x1="4" y1="28" x2="28" y2="28"/></g><g fill="#1A8F85"><circle cx="16" cy="6" r="4"/><circle cx="4" cy="28" r="4"/><circle cx="28" cy="28" r="4"/></g></svg></h1>
+  <span class="viewsw">
+    <button id="v-diagram" class="active" title="object diagram view">diagram</button><button id="v-paths" title="consolidated host → match → service view">paths</button>
+  </span>
+  <label>gateway <select id="f-gw"><option value="">all</option><option>public-gateway</option><option>api-gateway</option><option>grpc-gateway</option><option>edge-l4-gateway</option></select></label>
+  <label>namespace <select id="f-ns"><option value="">all</option><option>prod</option><option>internal</option></select></label>
+  <label>host <select id="f-host"><option value="">all</option><option>acme.com</option><option>www.acme.com</option><option>*.tenants.acme.com</option><option>internal.acme.com</option><option>api.acme.com</option><option>grpc.acme.com</option><option>stream.acme.com</option><option>orders</option><option>inventory</option><option>notifications</option></select></label>
+  <label>path <input type="text" id="f-uri" placeholder="/api/v2" size="12"
+    title="show only rules with a URI condition under this prefix"></label>
+  <label>service <input type="text" id="f-svc" placeholder="api-gateway" size="12"
+    title="show only rules routing to services whose name contains this text"></label>
+  <label><input type="checkbox" id="f-warn"> warnings only</label>
+  <span class="zoom">
+    <button id="z-out" title="zoom out">−</button><span id="z-pct">100%</span><button id="z-in" title="zoom in">+</button>
+    <button id="z-fit" title="scale each diagram to fit the window width">fit</button>
+    <button id="z-reset" title="reset zoom">1:1</button>
+  </span>
+</header>
+<main>
+  <div id="left">
+    <div id="diagrams">
+    <div class="trace-log"><div><b>trace:</b> POST /v2/orders host=api.acme.com x-canary:true</div>
+<div class="win">✔ rule #1 MATCHED — matched</div>
+<div><b>result:</b> rule #1 of prod/api-routes matches → api.prod:8080 subset v2 (80%), api.prod:8080 subset v3 (20%)</div></div>
+    <section class="diagram-section" data-key="listener:istio-system/public-gateway#0" data-gateway="public-gateway" data-namespaces="prod" data-hosts="acme.com,www.acme.com,*.tenants.acme.com,internal.acme.com"><h2 title="click to collapse/expand"><span class="chev">▾</span>gateway istio-system/public-gateway — :443 HTTPS (SIMPLE TLS)<span class="count">4 hosts · 13 rules</span></h2><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="1223" height="836" viewBox="0 0 1223 836" data-section="listener:istio-system/public-gateway#0">
+<defs><marker id="arr-c6kbwq" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes" d="M 932 31 C 960 31, 960 31, 988 31" marker-end="url(#arr-c6kbwq)" data-from="rule:prod/apex-redirect#0" data-to="rule:prod/apex-redirect#0/redirect"/>
+<path class="edge evaluates" d="M 524 31 C 552 31, 552 31, 580 31" marker-end="url(#arr-c6kbwq)" data-from="host:listener:istio-system/public-gateway#0/prod/apex-redirect" data-to="rule:prod/apex-redirect#0"/>
+<path class="edge routes" d="M 932 91 C 960 91, 960 91, 988 91" marker-end="url(#arr-c6kbwq)" data-from="rule:prod/storefront#0" data-to="rule:prod/storefront#0/direct"/>
+<path class="edge routes" d="M 932 143 C 960 143, 960 143, 988 143" marker-end="url(#arr-c6kbwq)" data-from="rule:prod/storefront#1" data-to="rule:prod/storefront#1/redirect"/>
+<path class="edge routes" d="M 932 195 C 960 195, 960 195, 988 195" marker-end="url(#arr-c6kbwq)" data-from="rule:prod/storefront#2" data-to="dest:static-assets.prod.svc.cluster.local:80:-"/>
+<path class="edge routes" d="M 932 273 C 960 273, 960 247, 988 247" marker-end="url(#arr-c6kbwq)" data-from="rule:prod/storefront#3" data-to="dest:web.prod.svc.cluster.local:80:stable"/><text class="edge-label routes" x="960" y="256" text-anchor="middle">90%</text>
+<path class="edge routes" d="M 932 273 C 960 273, 960 299, 988 299" marker-end="url(#arr-c6kbwq)" data-from="rule:prod/storefront#3" data-to="dest:web.prod.svc.cluster.local:80:canary"/><text class="edge-label routes" x="960" y="282" text-anchor="middle">10%</text>
+<path class="edge routes" d="M 932 372 C 960 372, 960 353, 988 353" marker-end="url(#arr-c6kbwq)" data-from="rule:prod/storefront#4" data-to="dest:search.prod.svc.cluster.local:8080:-"/>
+<path class="edge mirrors" d="M 932 372 C 960 372, 960 391, 988 391" marker-end="url(#arr-c6kbwq)" data-from="rule:prod/storefront#4" data-to="dest:recommendations.prod.svc.cluster.local:8080:-"/><text class="edge-label mirrors" x="960" y="377.5" text-anchor="middle">mirror 25%</text>
+<path class="edge routes" d="M 932 466 C 960 466, 960 299, 988 299" marker-end="url(#arr-c6kbwq)" data-from="rule:prod/storefront#5" data-to="dest:web.prod.svc.cluster.local:80:canary"/>
+<path class="edge routes" d="M 932 546 C 960 546, 960 247, 988 247" marker-end="url(#arr-c6kbwq)" data-from="rule:prod/storefront#6" data-to="dest:web.prod.svc.cluster.local:80:stable"/>
+<path class="edge routes" d="M 932 598 C 960 598, 960 247, 988 247" marker-end="url(#arr-c6kbwq)" data-from="rule:prod/storefront#7" data-to="dest:web.prod.svc.cluster.local:80:stable"/>
+<path class="edge evaluates" d="M 524 341 C 552 341, 552 91, 580 91" marker-end="url(#arr-c6kbwq)" data-from="host:listener:istio-system/public-gateway#0/prod/storefront" data-to="rule:prod/storefront#0"/>
+<path class="edge evaluates" d="M 524 341 C 552 341, 552 143, 580 143" marker-end="url(#arr-c6kbwq)" data-from="host:listener:istio-system/public-gateway#0/prod/storefront" data-to="rule:prod/storefront#1"/>
+<path class="edge evaluates" d="M 524 341 C 552 341, 552 195, 580 195" marker-end="url(#arr-c6kbwq)" data-from="host:listener:istio-system/public-gateway#0/prod/storefront" data-to="rule:prod/storefront#2"/>
+<path class="edge evaluates" d="M 524 341 C 552 341, 552 273, 580 273" marker-end="url(#arr-c6kbwq)" data-from="host:listener:istio-system/public-gateway#0/prod/storefront" data-to="rule:prod/storefront#3"/>
+<path class="edge evaluates" d="M 524 341 C 552 341, 552 372, 580 372" marker-end="url(#arr-c6kbwq)" data-from="host:listener:istio-system/public-gateway#0/prod/storefront" data-to="rule:prod/storefront#4"/>
+<path class="edge evaluates" d="M 524 341 C 552 341, 552 466, 580 466" marker-end="url(#arr-c6kbwq)" data-from="host:listener:istio-system/public-gateway#0/prod/storefront" data-to="rule:prod/storefront#5"/>
+<path class="edge evaluates" d="M 524 341 C 552 341, 552 546, 580 546" marker-end="url(#arr-c6kbwq)" data-from="host:listener:istio-system/public-gateway#0/prod/storefront" data-to="rule:prod/storefront#6"/>
+<path class="edge evaluates" d="M 524 341 C 552 341, 552 598, 580 598" marker-end="url(#arr-c6kbwq)" data-from="host:listener:istio-system/public-gateway#0/prod/storefront" data-to="rule:prod/storefront#7"/>
+<path class="edge routes" d="M 932 651 C 960 651, 960 247, 988 247" marker-end="url(#arr-c6kbwq)" data-from="rule:prod/tenant-sites#0" data-to="dest:web.prod.svc.cluster.local:80:stable"/>
+<path class="edge routes" d="M 932 696 C 960 696, 960 247, 988 247" marker-end="url(#arr-c6kbwq)" data-from="rule:prod/tenant-sites#1" data-to="dest:web.prod.svc.cluster.local:80:stable"/>
+<path class="edge evaluates" d="M 524 670 C 552 670, 552 651, 580 651" marker-end="url(#arr-c6kbwq)" data-from="host:listener:istio-system/public-gateway#0/prod/tenant-sites" data-to="rule:prod/tenant-sites#0"/>
+<path class="edge evaluates" d="M 524 670 C 552 670, 552 696, 580 696" marker-end="url(#arr-c6kbwq)" data-from="host:listener:istio-system/public-gateway#0/prod/tenant-sites" data-to="rule:prod/tenant-sites#1"/>
+<path class="edge routes" d="M 932 749 C 960 749, 960 749, 988 749" marker-end="url(#arr-c6kbwq)" data-from="rule:prod/internal-portal#0" data-to="dest:internal-portal.prod.svc.cluster.local:8080:-"/>
+<path class="edge routes" d="M 932 794 C 960 794, 960 749, 988 749" marker-end="url(#arr-c6kbwq)" data-from="rule:prod/internal-portal#1" data-to="dest:internal-portal.prod.svc.cluster.local:8080:-"/>
+<path class="edge evaluates" d="M 524 768 C 552 768, 552 749, 580 749" marker-end="url(#arr-c6kbwq)" data-from="host:listener:istio-system/public-gateway#0/prod/internal-portal" data-to="rule:prod/internal-portal#0"/>
+<path class="edge evaluates" d="M 524 768 C 552 768, 552 794, 580 794" marker-end="url(#arr-c6kbwq)" data-from="host:listener:istio-system/public-gateway#0/prod/internal-portal" data-to="rule:prod/internal-portal#1"/>
+<path class="edge accepts" d="M 72 399.5 C 100 399.5, 80 399.5, 108 399.5" marker-end="url(#arr-c6kbwq)" data-from="listener:istio-system/public-gateway#0/client" data-to="listener:istio-system/public-gateway#0"/>
+<path class="edge accepts" d="M 295 399.5 C 323 399.5, 315 31, 343 31" marker-end="url(#arr-c6kbwq)" data-from="listener:istio-system/public-gateway#0" data-to="host:listener:istio-system/public-gateway#0/prod/apex-redirect"/>
+<path class="edge accepts" d="M 295 399.5 C 323 399.5, 315 341, 343 341" marker-end="url(#arr-c6kbwq)" data-from="listener:istio-system/public-gateway#0" data-to="host:listener:istio-system/public-gateway#0/prod/storefront"/>
+<path class="edge accepts" d="M 295 399.5 C 323 399.5, 315 670, 343 670" marker-end="url(#arr-c6kbwq)" data-from="listener:istio-system/public-gateway#0" data-to="host:listener:istio-system/public-gateway#0/prod/tenant-sites"/>
+<path class="edge accepts" d="M 295 399.5 C 323 399.5, 315 768, 343 768" marker-end="url(#arr-c6kbwq)" data-from="listener:istio-system/public-gateway#0" data-to="host:listener:istio-system/public-gateway#0/prod/internal-portal"/>
+<g class="node dest terminal" data-id="rule:prod/apex-redirect#0/redirect" data-kind="dest"><title>HTTP 301 → https://www.acme.com/</title><rect x="988" y="17" width="219" height="28" rx="6"/><text class="title" x="995" y="34">HTTP 301 → https://www.acme.com/</text></g>
+<g class="node rule" data-id="rule:prod/apex-redirect#0" data-kind="rule"><title>URI prefix /
+⤳ redirect 301</title><rect x="580" y="10" width="352" height="42" rx="6"/><text class="match" x="605" y="27">URI prefix /</text><text class="badge" x="587" y="41">⤳ redirect 301</text><circle class="badge-circle" cx="592" cy="23" r="9"/><text class="badge-text" x="592" y="26.5" text-anchor="middle">1</text></g>
+<g class="node host" data-id="host:listener:istio-system/public-gateway#0/prod/apex-redirect" data-kind="host"><title>acme.com
+vs: apex-redirect · prod</title><rect x="343" y="10" width="181" height="42" rx="6"/><text class="title" x="350" y="27">acme.com</text><text class="sub" x="350" y="41">vs: apex-redirect · prod</text></g>
+<g class="node dest terminal" data-id="rule:prod/storefront#0/direct" data-kind="dest"><title>direct response 200</title><rect x="988" y="77" width="219" height="28" rx="6"/><text class="title" x="995" y="94">direct response 200</text></g>
+<g class="node rule" data-id="rule:prod/storefront#0" data-kind="rule"><title>URI exact /healthz
+▣ direct 200</title><rect x="580" y="70" width="352" height="42" rx="6"/><text class="match" x="605" y="87">URI exact /healthz</text><text class="badge" x="587" y="101">▣ direct 200</text><circle class="badge-circle" cx="592" cy="83" r="9"/><text class="badge-text" x="592" y="86.5" text-anchor="middle">1</text></g>
+<g class="node dest terminal" data-id="rule:prod/storefront#1/redirect" data-kind="dest"><title>HTTP 301 → /</title><rect x="988" y="129" width="219" height="28" rx="6"/><text class="title" x="995" y="146">HTTP 301 → /</text></g>
+<g class="node rule" data-id="rule:prod/storefront#1" data-kind="rule"><title>URI exact /home
+⤳ redirect 301</title><rect x="580" y="122" width="352" height="42" rx="6"/><text class="match" x="605" y="139">URI exact /home</text><text class="badge" x="587" y="153">⤳ redirect 301</text><circle class="badge-circle" cx="592" cy="135" r="9"/><text class="badge-text" x="592" y="138.5" text-anchor="middle">2</text></g>
+<g class="node dest" data-id="dest:static-assets.prod.svc.cluster.local:80:-" data-kind="dest"><title>static-assets.prod:80</title><rect x="988" y="181" width="219" height="28" rx="6"/><text class="title" x="995" y="198">static-assets.prod:80</text></g>
+<g class="node rule" data-id="rule:prod/storefront#2" data-kind="rule"><title>URI prefix /assets
+✂ rewrite /  ⏱ timeout 3s  ≡ headers</title><rect x="580" y="174" width="352" height="42" rx="6"/><text class="match" x="605" y="191">URI prefix /assets</text><text class="badge" x="587" y="205">✂ rewrite /  ⏱ timeout 3s  ≡ headers</text><circle class="badge-circle" cx="592" cy="187" r="9"/><text class="badge-text" x="592" y="190.5" text-anchor="middle">3</text></g>
+<g class="node dest" data-id="dest:web.prod.svc.cluster.local:80:stable" data-kind="dest"><title>web.prod:80
+subset: stable (track=stable)</title><rect x="988" y="226" width="219" height="42" rx="6"/><text class="title" x="995" y="243">web.prod:80</text><text class="sub" x="995" y="257">subset: stable (track=stable)</text></g>
+<g class="node dest" data-id="dest:web.prod.svc.cluster.local:80:canary" data-kind="dest"><title>web.prod:80
+subset: canary (track=canary)</title><rect x="988" y="278" width="219" height="42" rx="6"/><text class="title" x="995" y="295">web.prod:80</text><text class="sub" x="995" y="309">subset: canary (track=canary)</text></g>
+<g class="node rule" data-id="rule:prod/storefront#3" data-kind="rule"><title>URI prefix /shop
+↻ retry 3x</title><rect x="580" y="252" width="352" height="42" rx="6"/><text class="match" x="605" y="269">URI prefix /shop</text><text class="badge" x="587" y="283">↻ retry 3x</text><circle class="badge-circle" cx="592" cy="265" r="9"/><text class="badge-text" x="592" y="268.5" text-anchor="middle">4</text></g>
+<g class="node dest" data-id="dest:search.prod.svc.cluster.local:8080:-" data-kind="dest"><title>search.prod:8080</title><rect x="988" y="339" width="219" height="28" rx="6"/><text class="title" x="995" y="356">search.prod:8080</text></g>
+<g class="node dest" data-id="dest:recommendations.prod.svc.cluster.local:8080:-" data-kind="dest"><title>recommendations.prod:8080</title><rect x="988" y="377" width="219" height="28" rx="6"/><text class="title" x="995" y="394">recommendations.prod:8080</text></g>
+<g class="node rule" data-id="rule:prod/storefront#4" data-kind="rule"><title>URI regex /search/[a-z0-9-]+ (case-insensitive)
+AND ?q regex .+
+AND ?page=1
+AND ?debug present
+🪞 mirror</title><rect x="580" y="330" width="352" height="84" rx="6"/><text class="regex" x="605" y="347">URI regex /search/[a-z0-9-]+ (case-insensitive)</text><text class="regex" x="587" y="361">AND ?q regex .+</text><text class="match" x="587" y="375">AND ?page=1</text><text class="match" x="587" y="389">AND ?debug present</text><text class="badge" x="587" y="403">🪞 mirror</text><circle class="badge-circle" cx="592" cy="343" r="9"/><text class="badge-text" x="592" y="346.5" text-anchor="middle">5</text></g>
+<g class="node rule" data-id="rule:prod/storefront#5" data-kind="rule"><title>header x-acme-channel regex beta|canary
+AND header x-opt-out absent
+OR
+header cookie prefix acme_beta=
+⚡ fault  ◌ CORS</title><rect x="580" y="424" width="352" height="84" rx="6"/><text class="regex" x="605" y="441">header x-acme-channel regex beta|canary</text><text class="match" x="587" y="455">AND header x-opt-out absent</text><text class="or" x="587" y="469">OR</text><text class="match" x="587" y="483">header cookie prefix acme_beta=</text><text class="badge" x="587" y="497">⚡ fault  ◌ CORS</text><circle class="badge-circle" cx="592" cy="437" r="9"/><text class="badge-text" x="592" y="440.5" text-anchor="middle">6</text></g>
+<g class="node rule" data-id="rule:prod/storefront#6" data-kind="rule"><title>URI prefix /account
+AND method GET|HEAD
+✂ rewrite regex  ≡ headers</title><rect x="580" y="518" width="352" height="56" rx="6"/><text class="match" x="605" y="535">URI prefix /account</text><text class="match" x="587" y="549">AND method GET|HEAD</text><text class="badge" x="587" y="563">✂ rewrite regex  ≡ headers</text><circle class="badge-circle" cx="592" cy="531" r="9"/><text class="badge-text" x="592" y="534.5" text-anchor="middle">7</text></g>
+<g class="node rule" data-id="rule:prod/storefront#7" data-kind="rule"><title>URI prefix /</title><rect x="580" y="584" width="352" height="28" rx="6"/><text class="match" x="605" y="601">URI prefix /</text><circle class="badge-circle" cx="592" cy="597" r="9"/><text class="badge-text" x="592" y="600.5" text-anchor="middle">8</text></g>
+<g class="node host" data-id="host:listener:istio-system/public-gateway#0/prod/storefront" data-kind="host"><title>www.acme.com
+vs: storefront · prod</title><rect x="343" y="320" width="181" height="42" rx="6"/><text class="title" x="350" y="337">www.acme.com</text><text class="sub" x="350" y="351">vs: storefront · prod</text></g>
+<g class="node rule" data-id="rule:prod/tenant-sites#0" data-kind="rule"><title>URI prefix /app
+AND authority regex [a-z0-9-]+\.tenants\.acme\.com</title><rect x="580" y="630" width="352" height="42" rx="6"/><text class="match" x="605" y="647">URI prefix /app</text><text class="regex" x="587" y="661">AND authority regex [a-z0-9-]+\.tenants\.acme\.com</text><circle class="badge-circle" cx="592" cy="643" r="9"/><text class="badge-text" x="592" y="646.5" text-anchor="middle">1</text></g>
+<g class="node rule" data-id="rule:prod/tenant-sites#1" data-kind="rule"><title>/* (catch-all)</title><rect x="580" y="682" width="352" height="28" rx="6"/><text class="match" x="605" y="699">/* (catch-all)</text><circle class="badge-circle" cx="592" cy="695" r="9"/><text class="badge-text" x="592" y="698.5" text-anchor="middle">2</text></g>
+<g class="node host" data-id="host:listener:istio-system/public-gateway#0/prod/tenant-sites" data-kind="host"><title>*.tenants.acme.com
+vs: tenant-sites · prod</title><rect x="343" y="649" width="181" height="42" rx="6"/><text class="title" x="350" y="666">*.tenants.acme.com</text><text class="sub" x="350" y="680">vs: tenant-sites · prod</text></g>
+<g class="node dest" data-id="dest:internal-portal.prod.svc.cluster.local:8080:-" data-kind="dest"><title>internal-portal.prod:8080</title><rect x="988" y="735" width="219" height="28" rx="6"/><text class="title" x="995" y="752">internal-portal.prod:8080</text></g>
+<g class="node rule" data-id="rule:prod/internal-portal#0" data-kind="rule"><title>URI prefix /
+AND sourceLabels team=platform</title><rect x="580" y="728" width="352" height="42" rx="6"/><text class="match" x="605" y="745">URI prefix /</text><text class="match" x="587" y="759">AND sourceLabels team=platform</text><circle class="badge-circle" cx="592" cy="741" r="9"/><text class="badge-text" x="592" y="744.5" text-anchor="middle">1</text></g>
+<g class="node rule" data-id="rule:prod/internal-portal#1" data-kind="rule"><title>/* (catch-all)</title><rect x="580" y="780" width="352" height="28" rx="6"/><text class="match" x="605" y="797">/* (catch-all)</text><circle class="badge-circle" cx="592" cy="793" r="9"/><text class="badge-text" x="592" y="796.5" text-anchor="middle">2</text></g>
+<g class="node host" data-id="host:listener:istio-system/public-gateway#0/prod/internal-portal" data-kind="host"><title>internal.acme.com
+vs: internal-portal · prod</title><rect x="343" y="747" width="181" height="42" rx="6"/><text class="title" x="350" y="764">internal.acme.com</text><text class="sub" x="350" y="778">vs: internal-portal · prod</text></g>
+<g class="node listener" data-id="listener:istio-system/public-gateway#0" data-kind="listener"><title>istio-system/public-gateway
+:443 HTTPS (SIMPLE TLS)
+acme.com
+www.acme.com
+*.acme.com</title><rect x="108" y="357.5" width="187" height="84" rx="6"/><text class="title" x="115" y="374.5">istio-system/public-gateway</text><text class="sub" x="115" y="388.5">:443 HTTPS (SIMPLE TLS)</text><text class="dim" x="115" y="402.5">acme.com</text><text class="dim" x="115" y="416.5">www.acme.com</text><text class="dim" x="115" y="430.5">*.acme.com</text></g>
+<g class="node client" data-id="listener:istio-system/public-gateway#0/client" data-kind="client"><rect x="10" y="382.5" width="62" height="34" rx="6"/><text class="title" x="17" y="399.5">Client</text></g>
+</svg></div></section>
+<section class="diagram-section" data-key="listener:istio-system/public-gateway#1" data-gateway="public-gateway" data-namespaces="prod" data-hosts="acme.com,www.acme.com,*.tenants.acme.com,internal.acme.com"><h2 title="click to collapse/expand"><span class="chev">▾</span>gateway istio-system/public-gateway — :80 HTTP<span class="count">4 hosts · 13 rules</span></h2><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="1223" height="836" viewBox="0 0 1223 836" data-section="listener:istio-system/public-gateway#1">
+<defs><marker id="arr-c6kbwr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes" d="M 932 31 C 960 31, 960 31, 988 31" marker-end="url(#arr-c6kbwr)" data-from="rule:prod/apex-redirect#0" data-to="rule:prod/apex-redirect#0/redirect"/>
+<path class="edge evaluates" d="M 524 31 C 552 31, 552 31, 580 31" marker-end="url(#arr-c6kbwr)" data-from="host:listener:istio-system/public-gateway#1/prod/apex-redirect" data-to="rule:prod/apex-redirect#0"/>
+<path class="edge routes" d="M 932 91 C 960 91, 960 91, 988 91" marker-end="url(#arr-c6kbwr)" data-from="rule:prod/storefront#0" data-to="rule:prod/storefront#0/direct"/>
+<path class="edge routes" d="M 932 143 C 960 143, 960 143, 988 143" marker-end="url(#arr-c6kbwr)" data-from="rule:prod/storefront#1" data-to="rule:prod/storefront#1/redirect"/>
+<path class="edge routes" d="M 932 195 C 960 195, 960 195, 988 195" marker-end="url(#arr-c6kbwr)" data-from="rule:prod/storefront#2" data-to="dest:static-assets.prod.svc.cluster.local:80:-"/>
+<path class="edge routes" d="M 932 273 C 960 273, 960 247, 988 247" marker-end="url(#arr-c6kbwr)" data-from="rule:prod/storefront#3" data-to="dest:web.prod.svc.cluster.local:80:stable"/><text class="edge-label routes" x="960" y="256" text-anchor="middle">90%</text>
+<path class="edge routes" d="M 932 273 C 960 273, 960 299, 988 299" marker-end="url(#arr-c6kbwr)" data-from="rule:prod/storefront#3" data-to="dest:web.prod.svc.cluster.local:80:canary"/><text class="edge-label routes" x="960" y="282" text-anchor="middle">10%</text>
+<path class="edge routes" d="M 932 372 C 960 372, 960 353, 988 353" marker-end="url(#arr-c6kbwr)" data-from="rule:prod/storefront#4" data-to="dest:search.prod.svc.cluster.local:8080:-"/>
+<path class="edge mirrors" d="M 932 372 C 960 372, 960 391, 988 391" marker-end="url(#arr-c6kbwr)" data-from="rule:prod/storefront#4" data-to="dest:recommendations.prod.svc.cluster.local:8080:-"/><text class="edge-label mirrors" x="960" y="377.5" text-anchor="middle">mirror 25%</text>
+<path class="edge routes" d="M 932 466 C 960 466, 960 299, 988 299" marker-end="url(#arr-c6kbwr)" data-from="rule:prod/storefront#5" data-to="dest:web.prod.svc.cluster.local:80:canary"/>
+<path class="edge routes" d="M 932 546 C 960 546, 960 247, 988 247" marker-end="url(#arr-c6kbwr)" data-from="rule:prod/storefront#6" data-to="dest:web.prod.svc.cluster.local:80:stable"/>
+<path class="edge routes" d="M 932 598 C 960 598, 960 247, 988 247" marker-end="url(#arr-c6kbwr)" data-from="rule:prod/storefront#7" data-to="dest:web.prod.svc.cluster.local:80:stable"/>
+<path class="edge evaluates" d="M 524 341 C 552 341, 552 91, 580 91" marker-end="url(#arr-c6kbwr)" data-from="host:listener:istio-system/public-gateway#1/prod/storefront" data-to="rule:prod/storefront#0"/>
+<path class="edge evaluates" d="M 524 341 C 552 341, 552 143, 580 143" marker-end="url(#arr-c6kbwr)" data-from="host:listener:istio-system/public-gateway#1/prod/storefront" data-to="rule:prod/storefront#1"/>
+<path class="edge evaluates" d="M 524 341 C 552 341, 552 195, 580 195" marker-end="url(#arr-c6kbwr)" data-from="host:listener:istio-system/public-gateway#1/prod/storefront" data-to="rule:prod/storefront#2"/>
+<path class="edge evaluates" d="M 524 341 C 552 341, 552 273, 580 273" marker-end="url(#arr-c6kbwr)" data-from="host:listener:istio-system/public-gateway#1/prod/storefront" data-to="rule:prod/storefront#3"/>
+<path class="edge evaluates" d="M 524 341 C 552 341, 552 372, 580 372" marker-end="url(#arr-c6kbwr)" data-from="host:listener:istio-system/public-gateway#1/prod/storefront" data-to="rule:prod/storefront#4"/>
+<path class="edge evaluates" d="M 524 341 C 552 341, 552 466, 580 466" marker-end="url(#arr-c6kbwr)" data-from="host:listener:istio-system/public-gateway#1/prod/storefront" data-to="rule:prod/storefront#5"/>
+<path class="edge evaluates" d="M 524 341 C 552 341, 552 546, 580 546" marker-end="url(#arr-c6kbwr)" data-from="host:listener:istio-system/public-gateway#1/prod/storefront" data-to="rule:prod/storefront#6"/>
+<path class="edge evaluates" d="M 524 341 C 552 341, 552 598, 580 598" marker-end="url(#arr-c6kbwr)" data-from="host:listener:istio-system/public-gateway#1/prod/storefront" data-to="rule:prod/storefront#7"/>
+<path class="edge routes" d="M 932 651 C 960 651, 960 247, 988 247" marker-end="url(#arr-c6kbwr)" data-from="rule:prod/tenant-sites#0" data-to="dest:web.prod.svc.cluster.local:80:stable"/>
+<path class="edge routes" d="M 932 696 C 960 696, 960 247, 988 247" marker-end="url(#arr-c6kbwr)" data-from="rule:prod/tenant-sites#1" data-to="dest:web.prod.svc.cluster.local:80:stable"/>
+<path class="edge evaluates" d="M 524 670 C 552 670, 552 651, 580 651" marker-end="url(#arr-c6kbwr)" data-from="host:listener:istio-system/public-gateway#1/prod/tenant-sites" data-to="rule:prod/tenant-sites#0"/>
+<path class="edge evaluates" d="M 524 670 C 552 670, 552 696, 580 696" marker-end="url(#arr-c6kbwr)" data-from="host:listener:istio-system/public-gateway#1/prod/tenant-sites" data-to="rule:prod/tenant-sites#1"/>
+<path class="edge routes" d="M 932 749 C 960 749, 960 749, 988 749" marker-end="url(#arr-c6kbwr)" data-from="rule:prod/internal-portal#0" data-to="dest:internal-portal.prod.svc.cluster.local:8080:-"/>
+<path class="edge routes" d="M 932 794 C 960 794, 960 749, 988 749" marker-end="url(#arr-c6kbwr)" data-from="rule:prod/internal-portal#1" data-to="dest:internal-portal.prod.svc.cluster.local:8080:-"/>
+<path class="edge evaluates" d="M 524 768 C 552 768, 552 749, 580 749" marker-end="url(#arr-c6kbwr)" data-from="host:listener:istio-system/public-gateway#1/prod/internal-portal" data-to="rule:prod/internal-portal#0"/>
+<path class="edge evaluates" d="M 524 768 C 552 768, 552 794, 580 794" marker-end="url(#arr-c6kbwr)" data-from="host:listener:istio-system/public-gateway#1/prod/internal-portal" data-to="rule:prod/internal-portal#1"/>
+<path class="edge accepts" d="M 72 399.5 C 100 399.5, 80 399.5, 108 399.5" marker-end="url(#arr-c6kbwr)" data-from="listener:istio-system/public-gateway#1/client" data-to="listener:istio-system/public-gateway#1"/>
+<path class="edge accepts" d="M 295 399.5 C 323 399.5, 315 31, 343 31" marker-end="url(#arr-c6kbwr)" data-from="listener:istio-system/public-gateway#1" data-to="host:listener:istio-system/public-gateway#1/prod/apex-redirect"/>
+<path class="edge accepts" d="M 295 399.5 C 323 399.5, 315 341, 343 341" marker-end="url(#arr-c6kbwr)" data-from="listener:istio-system/public-gateway#1" data-to="host:listener:istio-system/public-gateway#1/prod/storefront"/>
+<path class="edge accepts" d="M 295 399.5 C 323 399.5, 315 670, 343 670" marker-end="url(#arr-c6kbwr)" data-from="listener:istio-system/public-gateway#1" data-to="host:listener:istio-system/public-gateway#1/prod/tenant-sites"/>
+<path class="edge accepts" d="M 295 399.5 C 323 399.5, 315 768, 343 768" marker-end="url(#arr-c6kbwr)" data-from="listener:istio-system/public-gateway#1" data-to="host:listener:istio-system/public-gateway#1/prod/internal-portal"/>
+<g class="node dest terminal" data-id="rule:prod/apex-redirect#0/redirect" data-kind="dest"><title>HTTP 301 → https://www.acme.com/</title><rect x="988" y="17" width="219" height="28" rx="6"/><text class="title" x="995" y="34">HTTP 301 → https://www.acme.com/</text></g>
+<g class="node rule" data-id="rule:prod/apex-redirect#0" data-kind="rule"><title>URI prefix /
+⤳ redirect 301</title><rect x="580" y="10" width="352" height="42" rx="6"/><text class="match" x="605" y="27">URI prefix /</text><text class="badge" x="587" y="41">⤳ redirect 301</text><circle class="badge-circle" cx="592" cy="23" r="9"/><text class="badge-text" x="592" y="26.5" text-anchor="middle">1</text></g>
+<g class="node host" data-id="host:listener:istio-system/public-gateway#1/prod/apex-redirect" data-kind="host"><title>acme.com
+vs: apex-redirect · prod</title><rect x="343" y="10" width="181" height="42" rx="6"/><text class="title" x="350" y="27">acme.com</text><text class="sub" x="350" y="41">vs: apex-redirect · prod</text></g>
+<g class="node dest terminal" data-id="rule:prod/storefront#0/direct" data-kind="dest"><title>direct response 200</title><rect x="988" y="77" width="219" height="28" rx="6"/><text class="title" x="995" y="94">direct response 200</text></g>
+<g class="node rule" data-id="rule:prod/storefront#0" data-kind="rule"><title>URI exact /healthz
+▣ direct 200</title><rect x="580" y="70" width="352" height="42" rx="6"/><text class="match" x="605" y="87">URI exact /healthz</text><text class="badge" x="587" y="101">▣ direct 200</text><circle class="badge-circle" cx="592" cy="83" r="9"/><text class="badge-text" x="592" y="86.5" text-anchor="middle">1</text></g>
+<g class="node dest terminal" data-id="rule:prod/storefront#1/redirect" data-kind="dest"><title>HTTP 301 → /</title><rect x="988" y="129" width="219" height="28" rx="6"/><text class="title" x="995" y="146">HTTP 301 → /</text></g>
+<g class="node rule" data-id="rule:prod/storefront#1" data-kind="rule"><title>URI exact /home
+⤳ redirect 301</title><rect x="580" y="122" width="352" height="42" rx="6"/><text class="match" x="605" y="139">URI exact /home</text><text class="badge" x="587" y="153">⤳ redirect 301</text><circle class="badge-circle" cx="592" cy="135" r="9"/><text class="badge-text" x="592" y="138.5" text-anchor="middle">2</text></g>
+<g class="node dest" data-id="dest:static-assets.prod.svc.cluster.local:80:-" data-kind="dest"><title>static-assets.prod:80</title><rect x="988" y="181" width="219" height="28" rx="6"/><text class="title" x="995" y="198">static-assets.prod:80</text></g>
+<g class="node rule" data-id="rule:prod/storefront#2" data-kind="rule"><title>URI prefix /assets
+✂ rewrite /  ⏱ timeout 3s  ≡ headers</title><rect x="580" y="174" width="352" height="42" rx="6"/><text class="match" x="605" y="191">URI prefix /assets</text><text class="badge" x="587" y="205">✂ rewrite /  ⏱ timeout 3s  ≡ headers</text><circle class="badge-circle" cx="592" cy="187" r="9"/><text class="badge-text" x="592" y="190.5" text-anchor="middle">3</text></g>
+<g class="node dest" data-id="dest:web.prod.svc.cluster.local:80:stable" data-kind="dest"><title>web.prod:80
+subset: stable (track=stable)</title><rect x="988" y="226" width="219" height="42" rx="6"/><text class="title" x="995" y="243">web.prod:80</text><text class="sub" x="995" y="257">subset: stable (track=stable)</text></g>
+<g class="node dest" data-id="dest:web.prod.svc.cluster.local:80:canary" data-kind="dest"><title>web.prod:80
+subset: canary (track=canary)</title><rect x="988" y="278" width="219" height="42" rx="6"/><text class="title" x="995" y="295">web.prod:80</text><text class="sub" x="995" y="309">subset: canary (track=canary)</text></g>
+<g class="node rule" data-id="rule:prod/storefront#3" data-kind="rule"><title>URI prefix /shop
+↻ retry 3x</title><rect x="580" y="252" width="352" height="42" rx="6"/><text class="match" x="605" y="269">URI prefix /shop</text><text class="badge" x="587" y="283">↻ retry 3x</text><circle class="badge-circle" cx="592" cy="265" r="9"/><text class="badge-text" x="592" y="268.5" text-anchor="middle">4</text></g>
+<g class="node dest" data-id="dest:search.prod.svc.cluster.local:8080:-" data-kind="dest"><title>search.prod:8080</title><rect x="988" y="339" width="219" height="28" rx="6"/><text class="title" x="995" y="356">search.prod:8080</text></g>
+<g class="node dest" data-id="dest:recommendations.prod.svc.cluster.local:8080:-" data-kind="dest"><title>recommendations.prod:8080</title><rect x="988" y="377" width="219" height="28" rx="6"/><text class="title" x="995" y="394">recommendations.prod:8080</text></g>
+<g class="node rule" data-id="rule:prod/storefront#4" data-kind="rule"><title>URI regex /search/[a-z0-9-]+ (case-insensitive)
+AND ?q regex .+
+AND ?page=1
+AND ?debug present
+🪞 mirror</title><rect x="580" y="330" width="352" height="84" rx="6"/><text class="regex" x="605" y="347">URI regex /search/[a-z0-9-]+ (case-insensitive)</text><text class="regex" x="587" y="361">AND ?q regex .+</text><text class="match" x="587" y="375">AND ?page=1</text><text class="match" x="587" y="389">AND ?debug present</text><text class="badge" x="587" y="403">🪞 mirror</text><circle class="badge-circle" cx="592" cy="343" r="9"/><text class="badge-text" x="592" y="346.5" text-anchor="middle">5</text></g>
+<g class="node rule" data-id="rule:prod/storefront#5" data-kind="rule"><title>header x-acme-channel regex beta|canary
+AND header x-opt-out absent
+OR
+header cookie prefix acme_beta=
+⚡ fault  ◌ CORS</title><rect x="580" y="424" width="352" height="84" rx="6"/><text class="regex" x="605" y="441">header x-acme-channel regex beta|canary</text><text class="match" x="587" y="455">AND header x-opt-out absent</text><text class="or" x="587" y="469">OR</text><text class="match" x="587" y="483">header cookie prefix acme_beta=</text><text class="badge" x="587" y="497">⚡ fault  ◌ CORS</text><circle class="badge-circle" cx="592" cy="437" r="9"/><text class="badge-text" x="592" y="440.5" text-anchor="middle">6</text></g>
+<g class="node rule" data-id="rule:prod/storefront#6" data-kind="rule"><title>URI prefix /account
+AND method GET|HEAD
+✂ rewrite regex  ≡ headers</title><rect x="580" y="518" width="352" height="56" rx="6"/><text class="match" x="605" y="535">URI prefix /account</text><text class="match" x="587" y="549">AND method GET|HEAD</text><text class="badge" x="587" y="563">✂ rewrite regex  ≡ headers</text><circle class="badge-circle" cx="592" cy="531" r="9"/><text class="badge-text" x="592" y="534.5" text-anchor="middle">7</text></g>
+<g class="node rule" data-id="rule:prod/storefront#7" data-kind="rule"><title>URI prefix /</title><rect x="580" y="584" width="352" height="28" rx="6"/><text class="match" x="605" y="601">URI prefix /</text><circle class="badge-circle" cx="592" cy="597" r="9"/><text class="badge-text" x="592" y="600.5" text-anchor="middle">8</text></g>
+<g class="node host" data-id="host:listener:istio-system/public-gateway#1/prod/storefront" data-kind="host"><title>www.acme.com
+vs: storefront · prod</title><rect x="343" y="320" width="181" height="42" rx="6"/><text class="title" x="350" y="337">www.acme.com</text><text class="sub" x="350" y="351">vs: storefront · prod</text></g>
+<g class="node rule" data-id="rule:prod/tenant-sites#0" data-kind="rule"><title>URI prefix /app
+AND authority regex [a-z0-9-]+\.tenants\.acme\.com</title><rect x="580" y="630" width="352" height="42" rx="6"/><text class="match" x="605" y="647">URI prefix /app</text><text class="regex" x="587" y="661">AND authority regex [a-z0-9-]+\.tenants\.acme\.com</text><circle class="badge-circle" cx="592" cy="643" r="9"/><text class="badge-text" x="592" y="646.5" text-anchor="middle">1</text></g>
+<g class="node rule" data-id="rule:prod/tenant-sites#1" data-kind="rule"><title>/* (catch-all)</title><rect x="580" y="682" width="352" height="28" rx="6"/><text class="match" x="605" y="699">/* (catch-all)</text><circle class="badge-circle" cx="592" cy="695" r="9"/><text class="badge-text" x="592" y="698.5" text-anchor="middle">2</text></g>
+<g class="node host" data-id="host:listener:istio-system/public-gateway#1/prod/tenant-sites" data-kind="host"><title>*.tenants.acme.com
+vs: tenant-sites · prod</title><rect x="343" y="649" width="181" height="42" rx="6"/><text class="title" x="350" y="666">*.tenants.acme.com</text><text class="sub" x="350" y="680">vs: tenant-sites · prod</text></g>
+<g class="node dest" data-id="dest:internal-portal.prod.svc.cluster.local:8080:-" data-kind="dest"><title>internal-portal.prod:8080</title><rect x="988" y="735" width="219" height="28" rx="6"/><text class="title" x="995" y="752">internal-portal.prod:8080</text></g>
+<g class="node rule" data-id="rule:prod/internal-portal#0" data-kind="rule"><title>URI prefix /
+AND sourceLabels team=platform</title><rect x="580" y="728" width="352" height="42" rx="6"/><text class="match" x="605" y="745">URI prefix /</text><text class="match" x="587" y="759">AND sourceLabels team=platform</text><circle class="badge-circle" cx="592" cy="741" r="9"/><text class="badge-text" x="592" y="744.5" text-anchor="middle">1</text></g>
+<g class="node rule" data-id="rule:prod/internal-portal#1" data-kind="rule"><title>/* (catch-all)</title><rect x="580" y="780" width="352" height="28" rx="6"/><text class="match" x="605" y="797">/* (catch-all)</text><circle class="badge-circle" cx="592" cy="793" r="9"/><text class="badge-text" x="592" y="796.5" text-anchor="middle">2</text></g>
+<g class="node host" data-id="host:listener:istio-system/public-gateway#1/prod/internal-portal" data-kind="host"><title>internal.acme.com
+vs: internal-portal · prod</title><rect x="343" y="747" width="181" height="42" rx="6"/><text class="title" x="350" y="764">internal.acme.com</text><text class="sub" x="350" y="778">vs: internal-portal · prod</text></g>
+<g class="node listener" data-id="listener:istio-system/public-gateway#1" data-kind="listener"><title>istio-system/public-gateway
+:80 HTTP
+acme.com
+www.acme.com
+*.acme.com</title><rect x="108" y="357.5" width="187" height="84" rx="6"/><text class="title" x="115" y="374.5">istio-system/public-gateway</text><text class="sub" x="115" y="388.5">:80 HTTP</text><text class="dim" x="115" y="402.5">acme.com</text><text class="dim" x="115" y="416.5">www.acme.com</text><text class="dim" x="115" y="430.5">*.acme.com</text></g>
+<g class="node client" data-id="listener:istio-system/public-gateway#1/client" data-kind="client"><rect x="10" y="382.5" width="62" height="34" rx="6"/><text class="title" x="17" y="399.5">Client</text></g>
+</svg></div></section>
+<section class="diagram-section" data-key="listener:istio-system/public-gateway#2" data-gateway="public-gateway" data-namespaces="prod" data-hosts="internal.acme.com"><h2 title="click to collapse/expand"><span class="chev">▾</span>gateway istio-system/public-gateway — :8080 HTTP<span class="count">1 host · 2 rules</span></h2><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="1050" height="118" viewBox="0 0 1050 118" data-section="listener:istio-system/public-gateway#2">
+<defs><marker id="arr-c6kbws" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes" d="M 804 31 C 832 31, 832 31, 860 31" marker-end="url(#arr-c6kbws)" data-from="rule:prod/internal-portal#0" data-to="dest:internal-portal.prod.svc.cluster.local:8080:-"/>
+<path class="edge routes" d="M 804 76 C 832 76, 832 31, 860 31" marker-end="url(#arr-c6kbws)" data-from="rule:prod/internal-portal#1" data-to="dest:internal-portal.prod.svc.cluster.local:8080:-"/>
+<path class="edge evaluates" d="M 524 50 C 552 50, 552 31, 580 31" marker-end="url(#arr-c6kbws)" data-from="host:listener:istio-system/public-gateway#2/prod/internal-portal" data-to="rule:prod/internal-portal#0"/>
+<path class="edge evaluates" d="M 524 50 C 552 50, 552 76, 580 76" marker-end="url(#arr-c6kbws)" data-from="host:listener:istio-system/public-gateway#2/prod/internal-portal" data-to="rule:prod/internal-portal#1"/>
+<path class="edge accepts" d="M 72 50 C 100 50, 80 50, 108 50" marker-end="url(#arr-c6kbws)" data-from="listener:istio-system/public-gateway#2/client" data-to="listener:istio-system/public-gateway#2"/>
+<path class="edge accepts" d="M 295 50 C 323 50, 315 50, 343 50" marker-end="url(#arr-c6kbws)" data-from="listener:istio-system/public-gateway#2" data-to="host:listener:istio-system/public-gateway#2/prod/internal-portal"/>
+<g class="node dest" data-id="dest:internal-portal.prod.svc.cluster.local:8080:-" data-kind="dest"><title>internal-portal.prod:8080</title><rect x="860" y="17" width="174" height="28" rx="6"/><text class="title" x="867" y="34">internal-portal.prod:8080</text></g>
+<g class="node rule" data-id="rule:prod/internal-portal#0" data-kind="rule"><title>URI prefix /
+AND sourceLabels team=platform</title><rect x="580" y="10" width="224" height="42" rx="6"/><text class="match" x="605" y="27">URI prefix /</text><text class="match" x="587" y="41">AND sourceLabels team=platform</text><circle class="badge-circle" cx="592" cy="23" r="9"/><text class="badge-text" x="592" y="26.5" text-anchor="middle">1</text></g>
+<g class="node rule" data-id="rule:prod/internal-portal#1" data-kind="rule"><title>/* (catch-all)</title><rect x="580" y="62" width="224" height="28" rx="6"/><text class="match" x="605" y="79">/* (catch-all)</text><circle class="badge-circle" cx="592" cy="75" r="9"/><text class="badge-text" x="592" y="78.5" text-anchor="middle">2</text></g>
+<g class="node host" data-id="host:listener:istio-system/public-gateway#2/prod/internal-portal" data-kind="host"><title>internal.acme.com
+vs: internal-portal · prod</title><rect x="343" y="29" width="181" height="42" rx="6"/><text class="title" x="350" y="46">internal.acme.com</text><text class="sub" x="350" y="60">vs: internal-portal · prod</text></g>
+<g class="node listener" data-id="listener:istio-system/public-gateway#2" data-kind="listener"><title>istio-system/public-gateway
+:8080 HTTP
+internal.acme.com</title><rect x="108" y="22" width="187" height="56" rx="6"/><text class="title" x="115" y="39">istio-system/public-gateway</text><text class="sub" x="115" y="53">:8080 HTTP</text><text class="dim" x="115" y="67">internal.acme.com</text></g>
+<g class="node client" data-id="listener:istio-system/public-gateway#2/client" data-kind="client"><rect x="10" y="33" width="62" height="34" rx="6"/><text class="title" x="17" y="50">Client</text></g>
+</svg></div></section>
+<section class="diagram-section" data-key="listener:istio-system/api-gateway#0" data-gateway="api-gateway" data-namespaces="prod" data-hosts="api.acme.com"><h2 title="click to collapse/expand"><span class="chev">▾</span>gateway istio-system/api-gateway — :443 HTTPS (MUTUAL TLS)<span class="count">1 host · 6 rules</span></h2><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="1028" height="444" viewBox="0 0 1028 444" data-section="listener:istio-system/api-gateway#0">
+<defs><marker id="arr-o2ovdt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes trace-win" d="M 786 76 C 814 76, 814 31, 842 31" marker-end="url(#arr-o2ovdt)" data-from="rule:prod/api-routes#0" data-to="dest:api.prod.svc.cluster.local:8080:v2"/><text class="edge-label routes" x="814" y="49.5" text-anchor="middle">80%</text>
+<path class="edge routes trace-win" d="M 786 76 C 814 76, 814 83, 842 83" marker-end="url(#arr-o2ovdt)" data-from="rule:prod/api-routes#0" data-to="dest:api.prod.svc.cluster.local:8080:v3"/><text class="edge-label routes" x="814" y="75.5" text-anchor="middle">20%</text>
+<path class="edge mirrors" d="M 786 76 C 814 76, 814 128, 842 128" marker-end="url(#arr-o2ovdt)" data-from="rule:prod/api-routes#0" data-to="dest:api-shadow.prod.svc.cluster.local:8080:-"/><text class="edge-label mirrors" x="814" y="98" text-anchor="middle">mirror</text>
+<path class="edge routes" d="M 786 180 C 814 180, 814 180, 842 180" marker-end="url(#arr-o2ovdt)" data-from="rule:prod/api-routes#1" data-to="dest:cart.prod.svc.cluster.local:8080:-"/>
+<path class="edge routes" d="M 786 239 C 814 239, 814 239, 842 239" marker-end="url(#arr-o2ovdt)" data-from="rule:prod/api-routes#2" data-to="dest:catalog.prod.svc.cluster.local:8080:-"/>
+<path class="edge routes" d="M 786 291 C 814 291, 814 291, 842 291" marker-end="url(#arr-o2ovdt)" data-from="rule:prod/api-routes#3" data-to="dest:payments.payments.svc.cluster.local:8080:v2"/>
+<path class="edge routes" d="M 786 343 C 814 343, 814 343, 842 343" marker-end="url(#arr-o2ovdt)" data-from="rule:prod/api-routes#4" data-to="dest:api.prod.svc.cluster.local:8080:v1"/>
+<path class="edge mirrors" d="M 786 343 C 814 343, 814 128, 842 128" marker-end="url(#arr-o2ovdt)" data-from="rule:prod/api-routes#4" data-to="dest:api-shadow.prod.svc.cluster.local:8080:-"/><text class="edge-label mirrors" x="814" y="231.5" text-anchor="middle">mirror 10%</text>
+<path class="edge routes" d="M 786 395 C 814 395, 814 395, 842 395" marker-end="url(#arr-o2ovdt)" data-from="rule:prod/api-routes#5" data-to="rule:prod/api-routes#5/redirect"/>
+<path class="edge evaluates trace-win" d="M 474 228.5 C 502 228.5, 502 76, 530 76" marker-end="url(#arr-o2ovdt)" data-from="host:listener:istio-system/api-gateway#0/prod/api-routes" data-to="rule:prod/api-routes#0"/>
+<path class="edge evaluates" d="M 474 228.5 C 502 228.5, 502 180, 530 180" marker-end="url(#arr-o2ovdt)" data-from="host:listener:istio-system/api-gateway#0/prod/api-routes" data-to="rule:prod/api-routes#1"/>
+<path class="edge evaluates" d="M 474 228.5 C 502 228.5, 502 239, 530 239" marker-end="url(#arr-o2ovdt)" data-from="host:listener:istio-system/api-gateway#0/prod/api-routes" data-to="rule:prod/api-routes#2"/>
+<path class="edge evaluates" d="M 474 228.5 C 502 228.5, 502 291, 530 291" marker-end="url(#arr-o2ovdt)" data-from="host:listener:istio-system/api-gateway#0/prod/api-routes" data-to="rule:prod/api-routes#3"/>
+<path class="edge evaluates" d="M 474 228.5 C 502 228.5, 502 343, 530 343" marker-end="url(#arr-o2ovdt)" data-from="host:listener:istio-system/api-gateway#0/prod/api-routes" data-to="rule:prod/api-routes#4"/>
+<path class="edge evaluates" d="M 474 228.5 C 502 228.5, 502 395, 530 395" marker-end="url(#arr-o2ovdt)" data-from="host:listener:istio-system/api-gateway#0/prod/api-routes" data-to="rule:prod/api-routes#5"/>
+<path class="edge accepts" d="M 72 228.5 C 100 228.5, 80 228.5, 108 228.5" marker-end="url(#arr-o2ovdt)" data-from="listener:istio-system/api-gateway#0/client" data-to="listener:istio-system/api-gateway#0"/>
+<path class="edge accepts trace-win" d="M 276 228.5 C 304 228.5, 296 228.5, 324 228.5" marker-end="url(#arr-o2ovdt)" data-from="listener:istio-system/api-gateway#0" data-to="host:listener:istio-system/api-gateway#0/prod/api-routes"/>
+<g class="node dest trace-win" data-id="dest:api.prod.svc.cluster.local:8080:v2" data-kind="dest"><title>api.prod:8080
+subset: v2 (version=v2)</title><rect x="842" y="10" width="170" height="42" rx="6"/><text class="title" x="849" y="27">api.prod:8080</text><text class="sub" x="849" y="41">subset: v2 (version=v2)</text></g>
+<g class="node dest trace-win" data-id="dest:api.prod.svc.cluster.local:8080:v3" data-kind="dest"><title>api.prod:8080
+subset: v3 (version=v3)</title><rect x="842" y="62" width="170" height="42" rx="6"/><text class="title" x="849" y="79">api.prod:8080</text><text class="sub" x="849" y="93">subset: v3 (version=v3)</text></g>
+<g class="node dest" data-id="dest:api-shadow.prod.svc.cluster.local:8080:-" data-kind="dest"><title>api-shadow.prod:8080</title><rect x="842" y="114" width="170" height="28" rx="6"/><text class="title" x="849" y="131">api-shadow.prod:8080</text></g>
+<g class="node rule trace-win" data-id="rule:prod/api-routes#0" data-kind="rule"><title>URI prefix /v2
+AND method POST
+AND header x-canary exact true
+⏱ timeout 5s  ↻ retry 3x  🪞 mirror</title><rect x="530" y="41" width="256" height="70" rx="6"/><text class="match" x="555" y="58">URI prefix /v2</text><text class="match" x="537" y="72">AND method POST</text><text class="match" x="537" y="86">AND header x-canary exact true</text><text class="badge" x="537" y="100">⏱ timeout 5s  ↻ retry 3x  🪞 mirror</text><circle class="badge-circle" cx="542" cy="54" r="9"/><text class="badge-text" x="542" y="57.5" text-anchor="middle">1</text></g>
+<g class="node dest" data-id="dest:cart.prod.svc.cluster.local:8080:-" data-kind="dest"><title>cart.prod:8080</title><rect x="842" y="166" width="170" height="28" rx="6"/><text class="title" x="849" y="183">cart.prod:8080</text></g>
+<g class="node rule" data-id="rule:prod/api-routes#1" data-kind="rule"><title>URI prefix /v2/cart
+AND scheme exact https
+AND header authorization present</title><rect x="530" y="152" width="256" height="56" rx="6"/><text class="match" x="555" y="169">URI prefix /v2/cart</text><text class="match" x="537" y="183">AND scheme exact https</text><text class="match" x="537" y="197">AND header authorization present</text><circle class="badge-circle" cx="542" cy="165" r="9"/><text class="badge-text" x="542" y="168.5" text-anchor="middle">2</text></g>
+<g class="node dest" data-id="dest:catalog.prod.svc.cluster.local:8080:-" data-kind="dest"><title>catalog.prod:8080</title><rect x="842" y="225" width="170" height="28" rx="6"/><text class="title" x="849" y="242">catalog.prod:8080</text></g>
+<g class="node rule" data-id="rule:prod/api-routes#2" data-kind="rule"><title>URI prefix /v2/catalog
+AND ?category regex .+</title><rect x="530" y="218" width="256" height="42" rx="6"/><text class="match" x="555" y="235">URI prefix /v2/catalog</text><text class="regex" x="537" y="249">AND ?category regex .+</text><circle class="badge-circle" cx="542" cy="231" r="9"/><text class="badge-text" x="542" y="234.5" text-anchor="middle">3</text></g>
+<g class="node dest" data-id="dest:payments.payments.svc.cluster.local:8080:v2" data-kind="dest"><title>payments.payments:8080
+subset: v2 (version=v2)</title><rect x="842" y="270" width="170" height="42" rx="6"/><text class="title" x="849" y="287">payments.payments:8080</text><text class="sub" x="849" y="301">subset: v2 (version=v2)</text></g>
+<g class="node rule" data-id="rule:prod/api-routes#3" data-kind="rule"><title>URI prefix /v2/payments
+AND port 443</title><rect x="530" y="270" width="256" height="42" rx="6"/><text class="match" x="555" y="287">URI prefix /v2/payments</text><text class="match" x="537" y="301">AND port 443</text><circle class="badge-circle" cx="542" cy="283" r="9"/><text class="badge-text" x="542" y="286.5" text-anchor="middle">4</text></g>
+<g class="node dest" data-id="dest:api.prod.svc.cluster.local:8080:v1" data-kind="dest"><title>api.prod:8080
+subset: v1 (version=v1)</title><rect x="842" y="322" width="170" height="42" rx="6"/><text class="title" x="849" y="339">api.prod:8080</text><text class="sub" x="849" y="353">subset: v1 (version=v1)</text></g>
+<g class="node rule" data-id="rule:prod/api-routes#4" data-kind="rule"><title>URI prefix /v2
+✂ rewrite /  🪞 mirror</title><rect x="530" y="322" width="256" height="42" rx="6"/><text class="match" x="555" y="339">URI prefix /v2</text><text class="badge" x="537" y="353">✂ rewrite /  🪞 mirror</text><circle class="badge-circle" cx="542" cy="335" r="9"/><text class="badge-text" x="542" y="338.5" text-anchor="middle">5</text></g>
+<g class="node dest terminal" data-id="rule:prod/api-routes#5/redirect" data-kind="dest"><title>HTTP 302 → /v2</title><rect x="842" y="381" width="170" height="28" rx="6"/><text class="title" x="849" y="398">HTTP 302 → /v2</text></g>
+<g class="node rule" data-id="rule:prod/api-routes#5" data-kind="rule"><title>URI prefix /v1
+⤳ redirect 302</title><rect x="530" y="374" width="256" height="42" rx="6"/><text class="match" x="555" y="391">URI prefix /v1</text><text class="badge" x="537" y="405">⤳ redirect 302</text><circle class="badge-circle" cx="542" cy="387" r="9"/><text class="badge-text" x="542" y="390.5" text-anchor="middle">6</text></g>
+<g class="node host trace-win" data-id="host:listener:istio-system/api-gateway#0/prod/api-routes" data-kind="host"><title>api.acme.com
+vs: api-routes · prod</title><rect x="324" y="207.5" width="150" height="42" rx="6"/><text class="title" x="331" y="224.5">api.acme.com</text><text class="sub" x="331" y="238.5">vs: api-routes · prod</text><circle class="finding-dot info" cx="468" cy="213.5" r="5.5"/></g>
+<g class="node listener trace-win" data-id="listener:istio-system/api-gateway#0" data-kind="listener"><title>istio-system/api-gateway
+:443 HTTPS (MUTUAL TLS)
+api.acme.com</title><rect x="108" y="200.5" width="168" height="56" rx="6"/><text class="title" x="115" y="217.5">istio-system/api-gateway</text><text class="sub" x="115" y="231.5">:443 HTTPS (MUTUAL TLS)</text><text class="dim" x="115" y="245.5">api.acme.com</text></g>
+<g class="node client" data-id="listener:istio-system/api-gateway#0/client" data-kind="client"><rect x="10" y="211.5" width="62" height="34" rx="6"/><text class="title" x="17" y="228.5">Client</text></g>
+</svg></div></section>
+<section class="diagram-section" data-key="listener:istio-system/grpc-gateway#0" data-gateway="grpc-gateway" data-namespaces="prod" data-hosts="grpc.acme.com"><h2 title="click to collapse/expand"><span class="chev">▾</span>gateway istio-system/grpc-gateway — :8443 GRPC (SIMPLE TLS)<span class="count">1 host · 2 rules</span></h2><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="1033" height="118" viewBox="0 0 1033 118" data-section="listener:istio-system/grpc-gateway#0">
+<defs><marker id="arr-1cmzdof" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes" d="M 791 31 C 819 31, 819 31, 847 31" marker-end="url(#arr-1cmzdof)" data-from="rule:prod/grpc-routes#0" data-to="dest:api.prod.svc.cluster.local:9090:-"/>
+<path class="edge routes" d="M 791 76 C 819 76, 819 31, 847 31" marker-end="url(#arr-1cmzdof)" data-from="rule:prod/grpc-routes#1" data-to="dest:api.prod.svc.cluster.local:9090:-"/>
+<path class="edge evaluates" d="M 485 50 C 513 50, 513 31, 541 31" marker-end="url(#arr-1cmzdof)" data-from="host:listener:istio-system/grpc-gateway#0/prod/grpc-routes" data-to="rule:prod/grpc-routes#0"/>
+<path class="edge evaluates" d="M 485 50 C 513 50, 513 76, 541 76" marker-end="url(#arr-1cmzdof)" data-from="host:listener:istio-system/grpc-gateway#0/prod/grpc-routes" data-to="rule:prod/grpc-routes#1"/>
+<path class="edge accepts" d="M 72 50 C 100 50, 80 50, 108 50" marker-end="url(#arr-1cmzdof)" data-from="listener:istio-system/grpc-gateway#0/client" data-to="listener:istio-system/grpc-gateway#0"/>
+<path class="edge accepts" d="M 282 50 C 310 50, 302 50, 330 50" marker-end="url(#arr-1cmzdof)" data-from="listener:istio-system/grpc-gateway#0" data-to="host:listener:istio-system/grpc-gateway#0/prod/grpc-routes"/>
+<g class="node dest" data-id="dest:api.prod.svc.cluster.local:9090:-" data-kind="dest"><title>api.prod:9090</title><rect x="847" y="17" width="170" height="28" rx="6"/><text class="title" x="854" y="34">api.prod:9090</text></g>
+<g class="node rule" data-id="rule:prod/grpc-routes#0" data-kind="rule"><title>URI prefix /acme.orders.v1.Orders/
+⏱ timeout 10s  ↻ retry 2x</title><rect x="541" y="10" width="250" height="42" rx="6"/><text class="match" x="566" y="27">URI prefix /acme.orders.v1.Orders/</text><text class="badge" x="548" y="41">⏱ timeout 10s  ↻ retry 2x</text><circle class="badge-circle" cx="553" cy="23" r="9"/><text class="badge-text" x="553" y="26.5" text-anchor="middle">1</text></g>
+<g class="node rule" data-id="rule:prod/grpc-routes#1" data-kind="rule"><title>/* (catch-all)</title><rect x="541" y="62" width="250" height="28" rx="6"/><text class="match" x="566" y="79">/* (catch-all)</text><circle class="badge-circle" cx="553" cy="75" r="9"/><text class="badge-text" x="553" y="78.5" text-anchor="middle">2</text></g>
+<g class="node host" data-id="host:listener:istio-system/grpc-gateway#0/prod/grpc-routes" data-kind="host"><title>grpc.acme.com
+vs: grpc-routes · prod</title><rect x="330" y="29" width="155" height="42" rx="6"/><text class="title" x="337" y="46">grpc.acme.com</text><text class="sub" x="337" y="60">vs: grpc-routes · prod</text></g>
+<g class="node listener" data-id="listener:istio-system/grpc-gateway#0" data-kind="listener"><title>istio-system/grpc-gateway
+:8443 GRPC (SIMPLE TLS)
+grpc.acme.com</title><rect x="108" y="22" width="174" height="56" rx="6"/><text class="title" x="115" y="39">istio-system/grpc-gateway</text><text class="sub" x="115" y="53">:8443 GRPC (SIMPLE TLS)</text><text class="dim" x="115" y="67">grpc.acme.com</text></g>
+<g class="node client" data-id="listener:istio-system/grpc-gateway#0/client" data-kind="client"><rect x="10" y="33" width="62" height="34" rx="6"/><text class="title" x="17" y="50">Client</text></g>
+</svg></div></section>
+<section class="diagram-section" data-key="listener:istio-system/grpc-gateway#1" data-gateway="grpc-gateway" data-namespaces="prod" data-hosts="stream.acme.com"><h2 title="click to collapse/expand"><span class="chev">▾</span>gateway istio-system/grpc-gateway — :9090 HTTP2<span class="count">1 host · 1 rule</span></h2><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="996" height="80" viewBox="0 0 996 80" data-section="listener:istio-system/grpc-gateway#1">
+<defs><marker id="arr-1cmzdog" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes" d="M 754 24 C 782 24, 782 24, 810 24" marker-end="url(#arr-1cmzdog)" data-from="rule:prod/stream-routes#0" data-to="dest:stream.prod.svc.cluster.local:9090:-"/>
+<path class="edge evaluates" d="M 498 31 C 526 31, 526 24, 554 24" marker-end="url(#arr-1cmzdog)" data-from="host:listener:istio-system/grpc-gateway#1/prod/stream-routes" data-to="rule:prod/stream-routes#0"/>
+<path class="edge accepts" d="M 72 31 C 100 31, 80 38, 108 38" marker-end="url(#arr-1cmzdog)" data-from="listener:istio-system/grpc-gateway#1/client" data-to="listener:istio-system/grpc-gateway#1"/>
+<path class="edge accepts" d="M 282 38 C 310 38, 302 31, 330 31" marker-end="url(#arr-1cmzdog)" data-from="listener:istio-system/grpc-gateway#1" data-to="host:listener:istio-system/grpc-gateway#1/prod/stream-routes"/>
+<g class="node dest" data-id="dest:stream.prod.svc.cluster.local:9090:-" data-kind="dest"><title>stream.prod:9090</title><rect x="810" y="10" width="170" height="28" rx="6"/><text class="title" x="817" y="27">stream.prod:9090</text></g>
+<g class="node rule" data-id="rule:prod/stream-routes#0" data-kind="rule"><title>/* (catch-all)</title><rect x="554" y="10" width="200" height="28" rx="6"/><text class="match" x="579" y="27">/* (catch-all)</text><circle class="badge-circle" cx="566" cy="23" r="9"/><text class="badge-text" x="566" y="26.5" text-anchor="middle">1</text></g>
+<g class="node host" data-id="host:listener:istio-system/grpc-gateway#1/prod/stream-routes" data-kind="host"><title>stream.acme.com
+vs: stream-routes · prod</title><rect x="330" y="10" width="168" height="42" rx="6"/><text class="title" x="337" y="27">stream.acme.com</text><text class="sub" x="337" y="41">vs: stream-routes · prod</text></g>
+<g class="node listener" data-id="listener:istio-system/grpc-gateway#1" data-kind="listener"><title>istio-system/grpc-gateway
+:9090 HTTP2
+stream.acme.com</title><rect x="108" y="10" width="174" height="56" rx="6"/><text class="title" x="115" y="27">istio-system/grpc-gateway</text><text class="sub" x="115" y="41">:9090 HTTP2</text><text class="dim" x="115" y="55">stream.acme.com</text></g>
+<g class="node client" data-id="listener:istio-system/grpc-gateway#1/client" data-kind="client"><rect x="10" y="14" width="62" height="34" rx="6"/><text class="title" x="17" y="31">Client</text></g>
+</svg></div></section>
+<section class="diagram-section" data-key="listener:istio-system/edge-l4-gateway#0" data-gateway="edge-l4-gateway" data-namespaces="" data-hosts=""><h2 title="click to collapse/expand"><span class="chev">▾</span>gateway istio-system/edge-l4-gateway — :15443 TLS (PASSTHROUGH TLS)<span class="count">0 hosts · 0 rules</span></h2><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="998" height="76" viewBox="0 0 998 76" data-section="listener:istio-system/edge-l4-gateway#0">
+<defs><marker id="arr-kw9hjz" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge accepts" d="M 72 27 C 100 27, 80 38, 108 38" marker-end="url(#arr-kw9hjz)" data-from="listener:istio-system/edge-l4-gateway#0/client" data-to="listener:istio-system/edge-l4-gateway#0"/>
+<g class="node listener" data-id="listener:istio-system/edge-l4-gateway#0" data-kind="listener"><title>istio-system/edge-l4-gateway
+:15443 TLS (PASSTHROUGH TLS)
+secure.acme.com</title><rect x="108" y="10" width="194" height="56" rx="6"/><text class="title" x="115" y="27">istio-system/edge-l4-gateway</text><text class="sub" x="115" y="41">:15443 TLS (PASSTHROUGH TLS)</text><text class="dim" x="115" y="55">secure.acme.com</text></g>
+<g class="node client" data-id="listener:istio-system/edge-l4-gateway#0/client" data-kind="client"><rect x="10" y="10" width="62" height="34" rx="6"/><text class="title" x="17" y="27">Client</text></g>
+</svg></div></section>
+<section class="diagram-section" data-key="listener:istio-system/edge-l4-gateway#1" data-gateway="edge-l4-gateway" data-namespaces="" data-hosts=""><h2 title="click to collapse/expand"><span class="chev">▾</span>gateway istio-system/edge-l4-gateway — :3306 TCP<span class="count">0 hosts · 0 rules</span></h2><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="998" height="76" viewBox="0 0 998 76" data-section="listener:istio-system/edge-l4-gateway#1">
+<defs><marker id="arr-kw9hk0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge accepts" d="M 72 27 C 100 27, 80 38, 108 38" marker-end="url(#arr-kw9hk0)" data-from="listener:istio-system/edge-l4-gateway#1/client" data-to="listener:istio-system/edge-l4-gateway#1"/>
+<g class="node listener" data-id="listener:istio-system/edge-l4-gateway#1" data-kind="listener"><title>istio-system/edge-l4-gateway
+:3306 TCP
+db.acme.com</title><rect x="108" y="10" width="194" height="56" rx="6"/><text class="title" x="115" y="27">istio-system/edge-l4-gateway</text><text class="sub" x="115" y="41">:3306 TCP</text><text class="dim" x="115" y="55">db.acme.com</text></g>
+<g class="node client" data-id="listener:istio-system/edge-l4-gateway#1/client" data-kind="client"><rect x="10" y="10" width="62" height="34" rx="6"/><text class="title" x="17" y="27">Client</text></g>
+</svg></div></section>
+<section class="diagram-section" data-key="mesh" data-gateway="" data-namespaces="internal" data-hosts="orders,inventory,notifications"><h2 title="click to collapse/expand"><span class="chev">▾</span>mesh routing (no gateway)<span class="count">3 hosts · 5 rules</span></h2><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="1083" height="332" viewBox="0 0 1083 332" data-section="mesh">
+<defs><marker id="arr-1zral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes" d="M 824 31 C 852 31, 852 31, 880 31" marker-end="url(#arr-1zral)" data-from="rule:internal/orders-mesh#0" data-to="dest:orders.internal.svc.cluster.local:8080:v2"/>
+<path class="edge routes" d="M 824 83 C 852 83, 852 83, 880 83" marker-end="url(#arr-1zral)" data-from="rule:internal/orders-mesh#1" data-to="dest:orders.internal.svc.cluster.local:8080:v1"/>
+<path class="edge evaluates" d="M 512 60.5 C 540 60.5, 540 31, 568 31" marker-end="url(#arr-1zral)" data-from="host:mesh/internal/orders-mesh" data-to="rule:internal/orders-mesh#0"/>
+<path class="edge evaluates" d="M 512 60.5 C 540 60.5, 540 83, 568 83" marker-end="url(#arr-1zral)" data-from="host:mesh/internal/orders-mesh" data-to="rule:internal/orders-mesh#1"/>
+<path class="edge routes" d="M 824 150 C 852 150, 852 150, 880 150" marker-end="url(#arr-1zral)" data-from="rule:internal/inventory-mesh#0" data-to="dest:inventory.internal.svc.cluster.local:8080:-"/>
+<path class="edge routes" d="M 824 216 C 852 216, 852 150, 880 150" marker-end="url(#arr-1zral)" data-from="rule:internal/inventory-mesh#1" data-to="dest:inventory.internal.svc.cluster.local:8080:-"/>
+<path class="edge evaluates" d="M 512 183 C 540 183, 540 150, 568 150" marker-end="url(#arr-1zral)" data-from="host:mesh/internal/inventory-mesh" data-to="rule:internal/inventory-mesh#0"/>
+<path class="edge evaluates" d="M 512 183 C 540 183, 540 216, 568 216" marker-end="url(#arr-1zral)" data-from="host:mesh/internal/inventory-mesh" data-to="rule:internal/inventory-mesh#1"/>
+<path class="edge routes" d="M 824 276 C 852 276, 852 276, 880 276" marker-end="url(#arr-1zral)" data-from="rule:internal/notifications-mesh#0" data-to="dest:notifications.internal.svc.cluster.local:8080:-"/>
+<path class="edge evaluates" d="M 512 283 C 540 283, 540 276, 568 276" marker-end="url(#arr-1zral)" data-from="host:mesh/internal/notifications-mesh" data-to="rule:internal/notifications-mesh#0"/>
+<path class="edge accepts" d="M 72 171.75 C 100 171.75, 80 171.75, 108 171.75" marker-end="url(#arr-1zral)" data-from="mesh:listener/client" data-to="mesh:listener"/>
+<path class="edge accepts" d="M 238 171.75 C 266 171.75, 258 60.5, 286 60.5" marker-end="url(#arr-1zral)" data-from="mesh:listener" data-to="host:mesh/internal/orders-mesh"/>
+<path class="edge accepts" d="M 238 171.75 C 266 171.75, 258 183, 286 183" marker-end="url(#arr-1zral)" data-from="mesh:listener" data-to="host:mesh/internal/inventory-mesh"/>
+<path class="edge accepts" d="M 238 171.75 C 266 171.75, 258 283, 286 283" marker-end="url(#arr-1zral)" data-from="mesh:listener" data-to="host:mesh/internal/notifications-mesh"/>
+<g class="node dest" data-id="dest:orders.internal.svc.cluster.local:8080:v2" data-kind="dest"><title>orders.internal:8080
+subset: v2 (version=v2)</title><rect x="880" y="10" width="187" height="42" rx="6"/><text class="title" x="887" y="27">orders.internal:8080</text><text class="sub" x="887" y="41">subset: v2 (version=v2)</text></g>
+<g class="node rule" data-id="rule:internal/orders-mesh#0" data-kind="rule"><title>header x-experiment exact orders-v2</title><rect x="568" y="17" width="256" height="28" rx="6"/><text class="match" x="593" y="34">header x-experiment exact orders-v2</text><circle class="badge-circle" cx="580" cy="30" r="9"/><text class="badge-text" x="580" y="33.5" text-anchor="middle">1</text></g>
+<g class="node dest" data-id="dest:orders.internal.svc.cluster.local:8080:v1" data-kind="dest"><title>orders.internal:8080
+subset: v1 (version=v1)</title><rect x="880" y="62" width="187" height="42" rx="6"/><text class="title" x="887" y="79">orders.internal:8080</text><text class="sub" x="887" y="93">subset: v1 (version=v1)</text></g>
+<g class="node rule" data-id="rule:internal/orders-mesh#1" data-kind="rule"><title>/* (catch-all)
+⚡ fault</title><rect x="568" y="62" width="256" height="42" rx="6"/><text class="match" x="593" y="79">/* (catch-all)</text><text class="badge" x="575" y="93">⚡ fault</text><circle class="badge-circle" cx="580" cy="75" r="9"/><text class="badge-text" x="580" y="78.5" text-anchor="middle">2</text></g>
+<g class="node host" data-id="host:mesh/internal/orders-mesh" data-kind="host"><title>orders
+vs: orders-mesh · internal</title><rect x="286" y="39.5" width="226" height="42" rx="6"/><text class="title" x="293" y="56.5">orders</text><text class="sub" x="293" y="70.5">vs: orders-mesh · internal</text></g>
+<g class="node dest" data-id="dest:inventory.internal.svc.cluster.local:8080:-" data-kind="dest"><title>inventory.internal:8080</title><rect x="880" y="136" width="187" height="28" rx="6"/><text class="title" x="887" y="153">inventory.internal:8080</text></g>
+<g class="node rule" data-id="rule:internal/inventory-mesh#0" data-kind="rule"><title>URI prefix /read
+AND method GET|HEAD
+⏱ timeout 1s</title><rect x="568" y="122" width="256" height="56" rx="6"/><text class="match" x="593" y="139">URI prefix /read</text><text class="match" x="575" y="153">AND method GET|HEAD</text><text class="badge" x="575" y="167">⏱ timeout 1s</text><circle class="badge-circle" cx="580" cy="135" r="9"/><text class="badge-text" x="580" y="138.5" text-anchor="middle">1</text></g>
+<g class="node rule" data-id="rule:internal/inventory-mesh#1" data-kind="rule"><title>URI prefix /write
+AND method POST
+↻ retry 2x</title><rect x="568" y="188" width="256" height="56" rx="6"/><text class="match" x="593" y="205">URI prefix /write</text><text class="match" x="575" y="219">AND method POST</text><text class="badge" x="575" y="233">↻ retry 2x</text><circle class="badge-circle" cx="580" cy="201" r="9"/><text class="badge-text" x="580" y="204.5" text-anchor="middle">2</text></g>
+<g class="node host" data-id="host:mesh/internal/inventory-mesh" data-kind="host"><title>inventory
+vs: inventory-mesh · internal</title><rect x="286" y="162" width="226" height="42" rx="6"/><text class="title" x="293" y="179">inventory</text><text class="sub" x="293" y="193">vs: inventory-mesh · internal</text><circle class="finding-dot info" cx="506" cy="168" r="5.5"/></g>
+<g class="node dest" data-id="dest:notifications.internal.svc.cluster.local:8080:-" data-kind="dest"><title>notifications.internal:8080</title><rect x="880" y="262" width="187" height="28" rx="6"/><text class="title" x="887" y="279">notifications.internal:8080</text></g>
+<g class="node rule" data-id="rule:internal/notifications-mesh#0" data-kind="rule"><title>/* (catch-all)</title><rect x="568" y="262" width="256" height="28" rx="6"/><text class="match" x="593" y="279">/* (catch-all)</text><circle class="badge-circle" cx="580" cy="275" r="9"/><text class="badge-text" x="580" y="278.5" text-anchor="middle">1</text></g>
+<g class="node host" data-id="host:mesh/internal/notifications-mesh" data-kind="host"><title>notifications
+vs: notifications-mesh · internal</title><rect x="286" y="262" width="226" height="42" rx="6"/><text class="title" x="293" y="279">notifications</text><text class="sub" x="293" y="293">vs: notifications-mesh · internal</text></g>
+<g class="node listener" data-id="mesh:listener" data-kind="listener"><title>mesh
+(sidecar routing)</title><rect x="108" y="150.75" width="130" height="42" rx="6"/><text class="title" x="115" y="167.75">mesh</text><text class="sub" x="115" y="181.75">(sidecar routing)</text></g>
+<g class="node client" data-id="mesh:listener/client" data-kind="client"><rect x="10" y="154.75" width="62" height="34" rx="6"/><text class="title" x="17" y="171.75">Client</text></g>
+</svg></div></section>
+    </div>
+    <div id="paths-view">
+      <div class="paths-toolbar"><span class="viewsw">
+        <button id="p-graph" class="active" title="host → match → service diagram">graph</button><button id="p-table" title="compact table">table</button>
+      </span></div>
+      <div id="paths-graph"><div class="pgroup-g" data-host="*.tenants.acme.com" data-gws="public-gateway" data-ns="prod"><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="864" height="96" viewBox="0 0 864 96" data-section="paths:*.tenants.acme.com">
+<defs><marker id="arr-19ggc4i" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes" d="M 622 24 C 650 24, 650 24, 678 24" marker-end="url(#arr-19ggc4i)" data-from="pm:*.tenants.acme.com#0" data-to="pd:*.tenants.acme.com:web.prod:80(stable)"/>
+<path class="edge routes" d="M 622 62 C 650 62, 650 24, 678 24" marker-end="url(#arr-19ggc4i)" data-from="pm:*.tenants.acme.com#1" data-to="pd:*.tenants.acme.com:web.prod:80(stable)"/>
+<path class="edge evaluates" d="M 248 43 C 276 43, 272 24, 300 24" marker-end="url(#arr-19ggc4i)" data-from="ph:*.tenants.acme.com" data-to="pm:*.tenants.acme.com#0"/>
+<path class="edge evaluates" d="M 248 43 C 276 43, 272 62, 300 62" marker-end="url(#arr-19ggc4i)" data-from="ph:*.tenants.acme.com" data-to="pm:*.tenants.acme.com#1"/>
+<g class="node dest" data-id="pd:*.tenants.acme.com:web.prod:80(stable)" data-kind="dest"><title>web.prod:80(stable)</title><rect x="678" y="10" width="170" height="28" rx="6"/><text class="title" x="685" y="27">web.prod:80(stable)</text></g>
+<g class="node rule" data-id="pm:*.tenants.acme.com#0" data-kind="rule"><title>*
+from prod/tenant-sites</title><rect x="300" y="10" width="322" height="28" rx="6"/><text class="match" x="325" y="27">*</text></g>
+<g class="node rule" data-id="pm:*.tenants.acme.com#1" data-kind="rule"><title>/app* {authority~[a-z0-9-]+\.tenants\.acme\.com}
+from prod/tenant-sites</title><rect x="300" y="48" width="322" height="28" rx="6"/><text class="match" x="325" y="65">/app* {authority~[a-z0-9-]+\.tenants\.acme\.com}</text></g>
+<g class="node host" data-id="ph:*.tenants.acme.com" data-kind="host"><title>*.tenants.acme.com
+via istio-system/public-gateway:443
+via istio-system/public-gateway:80</title><rect x="10" y="15" width="238" height="56" rx="6"/><text class="title" x="17" y="32">*.tenants.acme.com</text><text class="dim" x="17" y="46">via istio-system/public-gateway:443</text><text class="dim" x="17" y="60">via istio-system/public-gateway:80</text></g>
+</svg></div></div>
+<div class="pgroup-g" data-host="acme.com" data-gws="public-gateway" data-ns="prod"><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="794" height="86" viewBox="0 0 794 86" data-section="paths:acme.com">
+<defs><marker id="arr-4bn8wp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes" d="M 490 24 C 518 24, 518 24, 546 24" marker-end="url(#arr-4bn8wp)" data-from="pm:acme.com#0" data-to="pd:acme.com:redirect:301:https://www.acme.com/"/>
+<path class="edge evaluates" d="M 248 38 C 276 38, 272 24, 300 24" marker-end="url(#arr-4bn8wp)" data-from="ph:acme.com" data-to="pm:acme.com#0"/>
+<g class="node dest terminal" data-id="pd:acme.com:redirect:301:https://www.acme.com/" data-kind="dest"><title>redirect:301:https://www.acme.com/</title><rect x="546" y="10" width="232" height="28" rx="6"/><text class="title" x="553" y="27">redirect:301:https://www.acme.com/</text></g>
+<g class="node rule" data-id="pm:acme.com#0" data-kind="rule"><title>/*
+from prod/apex-redirect</title><rect x="300" y="10" width="190" height="28" rx="6"/><text class="match" x="325" y="27">/*</text></g>
+<g class="node host" data-id="ph:acme.com" data-kind="host"><title>acme.com
+via istio-system/public-gateway:443
+via istio-system/public-gateway:80</title><rect x="10" y="10" width="238" height="56" rx="6"/><text class="title" x="17" y="27">acme.com</text><text class="dim" x="17" y="41">via istio-system/public-gateway:443</text><text class="dim" x="17" y="55">via istio-system/public-gateway:80</text></g>
+</svg></div></div>
+<div class="pgroup-g" data-host="api.acme.com" data-gws="api-gateway" data-ns="prod"><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="862" height="300" viewBox="0 0 862 300" data-section="paths:api.acme.com">
+<defs><marker id="arr-h2kmy5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes" d="M 609 24 C 637 24, 637 24, 665 24" marker-end="url(#arr-h2kmy5)" data-from="pm:api.acme.com#0" data-to="pd:api.acme.com:redirect:302:/v2"/>
+<path class="edge routes" d="M 609 69 C 637 69, 637 69, 665 69" marker-end="url(#arr-h2kmy5)" data-from="pm:api.acme.com#1" data-to="pd:api.acme.com:api.prod:8080(v1)"/>
+<path class="edge routes" d="M 609 133 C 637 133, 637 114, 665 114" marker-end="url(#arr-h2kmy5)" data-from="pm:api.acme.com#2" data-to="pd:api.acme.com:api.prod:8080(v2)"/><text class="edge-label routes" x="637" y="119.5" text-anchor="middle">80%</text>
+<path class="edge routes" d="M 609 133 C 637 133, 637 152, 665 152" marker-end="url(#arr-h2kmy5)" data-from="pm:api.acme.com#2" data-to="pd:api.acme.com:api.prod:8080(v3)"/><text class="edge-label routes" x="637" y="138.5" text-anchor="middle">20%</text>
+<path class="edge routes" d="M 609 190 C 637 190, 637 190, 665 190" marker-end="url(#arr-h2kmy5)" data-from="pm:api.acme.com#3" data-to="pd:api.acme.com:cart.prod:8080"/>
+<path class="edge routes" d="M 609 228 C 637 228, 637 228, 665 228" marker-end="url(#arr-h2kmy5)" data-from="pm:api.acme.com#4" data-to="pd:api.acme.com:catalog.prod:8080"/>
+<path class="edge routes" d="M 609 266 C 637 266, 637 266, 665 266" marker-end="url(#arr-h2kmy5)" data-from="pm:api.acme.com#5" data-to="pd:api.acme.com:payments.payments:8080(v2)"/>
+<path class="edge evaluates" d="M 229 145 C 257 145, 253 24, 281 24" marker-end="url(#arr-h2kmy5)" data-from="ph:api.acme.com" data-to="pm:api.acme.com#0"/>
+<path class="edge evaluates" d="M 229 145 C 257 145, 253 69, 281 69" marker-end="url(#arr-h2kmy5)" data-from="ph:api.acme.com" data-to="pm:api.acme.com#1"/>
+<path class="edge evaluates" d="M 229 145 C 257 145, 253 133, 281 133" marker-end="url(#arr-h2kmy5)" data-from="ph:api.acme.com" data-to="pm:api.acme.com#2"/>
+<path class="edge evaluates" d="M 229 145 C 257 145, 253 190, 281 190" marker-end="url(#arr-h2kmy5)" data-from="ph:api.acme.com" data-to="pm:api.acme.com#3"/>
+<path class="edge evaluates" d="M 229 145 C 257 145, 253 228, 281 228" marker-end="url(#arr-h2kmy5)" data-from="ph:api.acme.com" data-to="pm:api.acme.com#4"/>
+<path class="edge evaluates" d="M 229 145 C 257 145, 253 266, 281 266" marker-end="url(#arr-h2kmy5)" data-from="ph:api.acme.com" data-to="pm:api.acme.com#5"/>
+<g class="node dest terminal" data-id="pd:api.acme.com:redirect:302:/v2" data-kind="dest"><title>redirect:302:/v2</title><rect x="665" y="10" width="181" height="28" rx="6"/><text class="title" x="672" y="27">redirect:302:/v2</text></g>
+<g class="node rule" data-id="pm:api.acme.com#0" data-kind="rule"><title>/v1*
+from prod/api-routes</title><rect x="281" y="10" width="328" height="28" rx="6"/><text class="match" x="306" y="27">/v1*</text></g>
+<g class="node dest" data-id="pd:api.acme.com:api.prod:8080(v1)" data-kind="dest"><title>api.prod:8080(v1)</title><rect x="665" y="55" width="181" height="28" rx="6"/><text class="title" x="672" y="72">api.prod:8080(v1)</text></g>
+<g class="node rule" data-id="pm:api.acme.com#1" data-kind="rule"><title>/v2*
+mirror api-shadow.prod:8080=10%  rewrite /
+from prod/api-routes</title><rect x="281" y="48" width="328" height="42" rx="6"/><text class="match" x="306" y="65">/v2*</text><text class="badge" x="288" y="79">mirror api-shadow.prod:8080=10%  rewrite /</text></g>
+<g class="node dest" data-id="pd:api.acme.com:api.prod:8080(v2)" data-kind="dest"><title>api.prod:8080(v2)</title><rect x="665" y="100" width="181" height="28" rx="6"/><text class="title" x="672" y="117">api.prod:8080(v2)</text></g>
+<g class="node dest" data-id="pd:api.acme.com:api.prod:8080(v3)" data-kind="dest"><title>api.prod:8080(v3)</title><rect x="665" y="138" width="181" height="28" rx="6"/><text class="title" x="672" y="155">api.prod:8080(v3)</text></g>
+<g class="node rule" data-id="pm:api.acme.com#2" data-kind="rule"><title>/v2* {header x-canary=true, method=POST}
+mirror api-shadow.prod:8080  retry 3x  timeout 5s
+from prod/api-routes</title><rect x="281" y="112" width="328" height="42" rx="6"/><text class="match" x="306" y="129">/v2* {header x-canary=true, method=POST}</text><text class="badge" x="288" y="143">mirror api-shadow.prod:8080  retry 3x  timeout 5s</text></g>
+<g class="node dest" data-id="pd:api.acme.com:cart.prod:8080" data-kind="dest"><title>cart.prod:8080</title><rect x="665" y="176" width="181" height="28" rx="6"/><text class="title" x="672" y="193">cart.prod:8080</text></g>
+<g class="node rule" data-id="pm:api.acme.com#3" data-kind="rule"><title>/v2/cart* {header authorization, scheme=https}
+from prod/api-routes</title><rect x="281" y="176" width="328" height="28" rx="6"/><text class="match" x="306" y="193">/v2/cart* {header authorization, scheme=https}</text></g>
+<g class="node dest" data-id="pd:api.acme.com:catalog.prod:8080" data-kind="dest"><title>catalog.prod:8080</title><rect x="665" y="214" width="181" height="28" rx="6"/><text class="title" x="672" y="231">catalog.prod:8080</text></g>
+<g class="node rule" data-id="pm:api.acme.com#4" data-kind="rule"><title>/v2/catalog* {?category~.+}
+from prod/api-routes</title><rect x="281" y="214" width="328" height="28" rx="6"/><text class="match" x="306" y="231">/v2/catalog* {?category~.+}</text></g>
+<g class="node dest" data-id="pd:api.acme.com:payments.payments:8080(v2)" data-kind="dest"><title>payments.payments:8080(v2)</title><rect x="665" y="252" width="181" height="28" rx="6"/><text class="title" x="672" y="269">payments.payments:8080(v2)</text></g>
+<g class="node rule" data-id="pm:api.acme.com#5" data-kind="rule"><title>/v2/payments* {port=443}
+from prod/api-routes</title><rect x="281" y="252" width="328" height="28" rx="6"/><text class="match" x="306" y="269">/v2/payments* {port=443}</text></g>
+<g class="node host" data-id="ph:api.acme.com" data-kind="host"><title>api.acme.com
+via istio-system/api-gateway:443</title><rect x="10" y="124" width="219" height="42" rx="6"/><text class="title" x="17" y="141">api.acme.com</text><text class="dim" x="17" y="155">via istio-system/api-gateway:443</text></g>
+</svg></div></div>
+<div class="pgroup-g" data-host="grpc.acme.com" data-gws="grpc-gateway" data-ns="prod"><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="726" height="110" viewBox="0 0 726 110" data-section="paths:grpc.acme.com">
+<defs><marker id="arr-s5aj9t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes" d="M 484 24 C 512 24, 512 24, 540 24" marker-end="url(#arr-s5aj9t)" data-from="pm:grpc.acme.com#0" data-to="pd:grpc.acme.com:api.prod:9090"/>
+<path class="edge routes" d="M 484 69 C 512 69, 512 24, 540 24" marker-end="url(#arr-s5aj9t)" data-from="pm:grpc.acme.com#1" data-to="pd:grpc.acme.com:api.prod:9090"/>
+<path class="edge evaluates" d="M 242 50 C 270 50, 266 24, 294 24" marker-end="url(#arr-s5aj9t)" data-from="ph:grpc.acme.com" data-to="pm:grpc.acme.com#0"/>
+<path class="edge evaluates" d="M 242 50 C 270 50, 266 69, 294 69" marker-end="url(#arr-s5aj9t)" data-from="ph:grpc.acme.com" data-to="pm:grpc.acme.com#1"/>
+<g class="node dest" data-id="pd:grpc.acme.com:api.prod:9090" data-kind="dest"><title>api.prod:9090</title><rect x="540" y="10" width="170" height="28" rx="6"/><text class="title" x="547" y="27">api.prod:9090</text></g>
+<g class="node rule" data-id="pm:grpc.acme.com#0" data-kind="rule"><title>*
+from prod/grpc-routes</title><rect x="294" y="10" width="190" height="28" rx="6"/><text class="match" x="319" y="27">*</text></g>
+<g class="node rule" data-id="pm:grpc.acme.com#1" data-kind="rule"><title>/acme.orders.v1.Orders/*
+retry 2x  timeout 10s
+from prod/grpc-routes</title><rect x="294" y="48" width="190" height="42" rx="6"/><text class="match" x="319" y="65">/acme.orders.v1.Orders/*</text><text class="badge" x="301" y="79">retry 2x  timeout 10s</text></g>
+<g class="node host" data-id="ph:grpc.acme.com" data-kind="host"><title>grpc.acme.com
+via istio-system/grpc-gateway:8443</title><rect x="10" y="29" width="232" height="42" rx="6"/><text class="title" x="17" y="46">grpc.acme.com</text><text class="dim" x="17" y="60">via istio-system/grpc-gateway:8443</text></g>
+</svg></div></div>
+<div class="pgroup-g" data-host="internal.acme.com" data-gws="public-gateway" data-ns="prod"><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="759" height="100" viewBox="0 0 759 100" data-section="paths:internal.acme.com">
+<defs><marker id="arr-eehw7m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes" d="M 513 24 C 541 24, 541 24, 569 24" marker-end="url(#arr-eehw7m)" data-from="pm:internal.acme.com#0" data-to="pd:internal.acme.com:internal-portal.prod:8080"/>
+<path class="edge routes" d="M 513 62 C 541 62, 541 24, 569 24" marker-end="url(#arr-eehw7m)" data-from="pm:internal.acme.com#1" data-to="pd:internal.acme.com:internal-portal.prod:8080"/>
+<path class="edge evaluates" d="M 255 45 C 283 45, 279 24, 307 24" marker-end="url(#arr-eehw7m)" data-from="ph:internal.acme.com" data-to="pm:internal.acme.com#0"/>
+<path class="edge evaluates" d="M 255 45 C 283 45, 279 62, 307 62" marker-end="url(#arr-eehw7m)" data-from="ph:internal.acme.com" data-to="pm:internal.acme.com#1"/>
+<g class="node dest" data-id="pd:internal.acme.com:internal-portal.prod:8080" data-kind="dest"><title>internal-portal.prod:8080</title><rect x="569" y="10" width="174" height="28" rx="6"/><text class="title" x="576" y="27">internal-portal.prod:8080</text></g>
+<g class="node rule" data-id="pm:internal.acme.com#0" data-kind="rule"><title>*
+from prod/internal-portal</title><rect x="307" y="10" width="206" height="28" rx="6"/><text class="match" x="332" y="27">*</text></g>
+<g class="node rule" data-id="pm:internal.acme.com#1" data-kind="rule"><title>/* {sourceLabel team=platform}
+from prod/internal-portal</title><rect x="307" y="48" width="206" height="28" rx="6"/><text class="match" x="332" y="65">/* {sourceLabel team=platform}</text></g>
+<g class="node host" data-id="ph:internal.acme.com" data-kind="host"><title>internal.acme.com
+via istio-system/public-gateway:443
+via istio-system/public-gateway:80
+via istio-system/public-gateway:8080</title><rect x="10" y="10" width="245" height="70" rx="6"/><text class="title" x="17" y="27">internal.acme.com</text><text class="dim" x="17" y="41">via istio-system/public-gateway:443</text><text class="dim" x="17" y="55">via istio-system/public-gateway:80</text><text class="dim" x="17" y="69">via istio-system/public-gateway:8080</text></g>
+</svg></div></div>
+<div class="pgroup-g" data-host="inventory" data-gws="" data-ns="internal"><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="654" height="124" viewBox="0 0 654 124" data-section="paths:inventory">
+<defs><marker id="arr-1owlqkw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes" d="M 412 31 C 440 31, 440 31, 468 31" marker-end="url(#arr-1owlqkw)" data-from="pm:inventory#0" data-to="pd:inventory:inventory.internal:8080"/>
+<path class="edge routes" d="M 412 83 C 440 83, 440 31, 468 31" marker-end="url(#arr-1owlqkw)" data-from="pm:inventory#1" data-to="pd:inventory:inventory.internal:8080"/>
+<path class="edge evaluates" d="M 170 57 C 198 57, 194 31, 222 31" marker-end="url(#arr-1owlqkw)" data-from="ph:inventory" data-to="pm:inventory#0"/>
+<path class="edge evaluates" d="M 170 57 C 198 57, 194 83, 222 83" marker-end="url(#arr-1owlqkw)" data-from="ph:inventory" data-to="pm:inventory#1"/>
+<g class="node dest" data-id="pd:inventory:inventory.internal:8080" data-kind="dest"><title>inventory.internal:8080</title><rect x="468" y="17" width="170" height="28" rx="6"/><text class="title" x="475" y="34">inventory.internal:8080</text></g>
+<g class="node rule" data-id="pm:inventory#0" data-kind="rule"><title>/read* {method~GET|HEAD}
+timeout 1s
+from internal/inventory-mesh</title><rect x="222" y="10" width="190" height="42" rx="6"/><text class="match" x="247" y="27">/read* {method~GET|HEAD}</text><text class="badge" x="229" y="41">timeout 1s</text></g>
+<g class="node rule" data-id="pm:inventory#1" data-kind="rule"><title>/write* {method=POST}
+retry 2x
+from internal/inventory-mesh</title><rect x="222" y="62" width="190" height="42" rx="6"/><text class="match" x="247" y="79">/write* {method=POST}</text><text class="badge" x="229" y="93">retry 2x</text></g>
+<g class="node host" data-id="ph:inventory" data-kind="host"><title>inventory
+via mesh</title><rect x="10" y="36" width="160" height="42" rx="6"/><text class="title" x="17" y="53">inventory</text><text class="dim" x="17" y="67">via mesh</text></g>
+</svg></div></div>
+<div class="pgroup-g" data-host="notifications" data-gws="" data-ns="internal"><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="671" height="72" viewBox="0 0 671 72" data-section="paths:notifications">
+<defs><marker id="arr-yblqak" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes" d="M 412 24 C 440 24, 440 24, 468 24" marker-end="url(#arr-yblqak)" data-from="pm:notifications#0" data-to="pd:notifications:notifications.internal:8080"/>
+<path class="edge evaluates" d="M 170 31 C 198 31, 194 24, 222 24" marker-end="url(#arr-yblqak)" data-from="ph:notifications" data-to="pm:notifications#0"/>
+<g class="node dest" data-id="pd:notifications:notifications.internal:8080" data-kind="dest"><title>notifications.internal:8080</title><rect x="468" y="10" width="187" height="28" rx="6"/><text class="title" x="475" y="27">notifications.internal:8080</text></g>
+<g class="node rule" data-id="pm:notifications#0" data-kind="rule"><title>*
+from internal/notifications-mesh</title><rect x="222" y="10" width="190" height="28" rx="6"/><text class="match" x="247" y="27">*</text></g>
+<g class="node host" data-id="ph:notifications" data-kind="host"><title>notifications
+via mesh</title><rect x="10" y="10" width="160" height="42" rx="6"/><text class="title" x="17" y="27">notifications</text><text class="dim" x="17" y="41">via mesh</text></g>
+</svg></div></div>
+<div class="pgroup-g" data-host="orders" data-gws="" data-ns="internal"><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="690" height="110" viewBox="0 0 690 110" data-section="paths:orders">
+<defs><marker id="arr-8s2cc1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes" d="M 448 31 C 476 31, 476 31, 504 31" marker-end="url(#arr-8s2cc1)" data-from="pm:orders#0" data-to="pd:orders:orders.internal:8080(v1)"/>
+<path class="edge routes" d="M 448 76 C 476 76, 476 76, 504 76" marker-end="url(#arr-8s2cc1)" data-from="pm:orders#1" data-to="pd:orders:orders.internal:8080(v2)"/>
+<path class="edge evaluates" d="M 170 50 C 198 50, 194 31, 222 31" marker-end="url(#arr-8s2cc1)" data-from="ph:orders" data-to="pm:orders#0"/>
+<path class="edge evaluates" d="M 170 50 C 198 50, 194 76, 222 76" marker-end="url(#arr-8s2cc1)" data-from="ph:orders" data-to="pm:orders#1"/>
+<g class="node dest" data-id="pd:orders:orders.internal:8080(v1)" data-kind="dest"><title>orders.internal:8080(v1)</title><rect x="504" y="17" width="170" height="28" rx="6"/><text class="title" x="511" y="34">orders.internal:8080(v1)</text></g>
+<g class="node rule" data-id="pm:orders#0" data-kind="rule"><title>*
+fault
+from internal/orders-mesh</title><rect x="222" y="10" width="226" height="42" rx="6"/><text class="match" x="247" y="27">*</text><text class="badge" x="229" y="41">fault</text></g>
+<g class="node dest" data-id="pd:orders:orders.internal:8080(v2)" data-kind="dest"><title>orders.internal:8080(v2)</title><rect x="504" y="62" width="170" height="28" rx="6"/><text class="title" x="511" y="79">orders.internal:8080(v2)</text></g>
+<g class="node rule" data-id="pm:orders#1" data-kind="rule"><title>* {header x-experiment=orders-v2}
+from internal/orders-mesh</title><rect x="222" y="62" width="226" height="28" rx="6"/><text class="match" x="247" y="79">* {header x-experiment=orders-v2}</text></g>
+<g class="node host" data-id="ph:orders" data-kind="host"><title>orders
+via mesh</title><rect x="10" y="29" width="160" height="42" rx="6"/><text class="title" x="17" y="46">orders</text><text class="dim" x="17" y="60">via mesh</text></g>
+</svg></div></div>
+<div class="pgroup-g" data-host="stream.acme.com" data-gws="grpc-gateway" data-ns="prod"><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="726" height="72" viewBox="0 0 726 72" data-section="paths:stream.acme.com">
+<defs><marker id="arr-it444v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes" d="M 484 24 C 512 24, 512 24, 540 24" marker-end="url(#arr-it444v)" data-from="pm:stream.acme.com#0" data-to="pd:stream.acme.com:stream.prod:9090"/>
+<path class="edge evaluates" d="M 242 31 C 270 31, 266 24, 294 24" marker-end="url(#arr-it444v)" data-from="ph:stream.acme.com" data-to="pm:stream.acme.com#0"/>
+<g class="node dest" data-id="pd:stream.acme.com:stream.prod:9090" data-kind="dest"><title>stream.prod:9090</title><rect x="540" y="10" width="170" height="28" rx="6"/><text class="title" x="547" y="27">stream.prod:9090</text></g>
+<g class="node rule" data-id="pm:stream.acme.com#0" data-kind="rule"><title>*
+from prod/stream-routes</title><rect x="294" y="10" width="190" height="28" rx="6"/><text class="match" x="319" y="27">*</text></g>
+<g class="node host" data-id="ph:stream.acme.com" data-kind="host"><title>stream.acme.com
+via istio-system/grpc-gateway:9090</title><rect x="10" y="10" width="232" height="42" rx="6"/><text class="title" x="17" y="27">stream.acme.com</text><text class="dim" x="17" y="41">via istio-system/grpc-gateway:9090</text></g>
+</svg></div></div>
+<div class="pgroup-g" data-host="www.acme.com" data-gws="public-gateway" data-ns="prod"><div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="915" height="446" viewBox="0 0 915 446" data-section="paths:www.acme.com">
+<defs><marker id="arr-nlo500" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="arrow"/></marker></defs>
+<path class="edge routes" d="M 673 31 C 701 31, 701 31, 729 31" marker-end="url(#arr-nlo500)" data-from="pm:www.acme.com#0" data-to="pd:www.acme.com:web.prod:80(canary)"/>
+<path class="edge routes" d="M 673 83 C 701 83, 701 31, 729 31" marker-end="url(#arr-nlo500)" data-from="pm:www.acme.com#1" data-to="pd:www.acme.com:web.prod:80(canary)"/>
+<path class="edge routes" d="M 673 128 C 701 128, 701 128, 729 128" marker-end="url(#arr-nlo500)" data-from="pm:www.acme.com#2" data-to="pd:www.acme.com:web.prod:80(stable)"/>
+<path class="edge routes" d="M 673 173 C 701 173, 701 128, 729 128" marker-end="url(#arr-nlo500)" data-from="pm:www.acme.com#3" data-to="pd:www.acme.com:web.prod:80(stable)"/>
+<path class="edge routes" d="M 673 225 C 701 225, 701 225, 729 225" marker-end="url(#arr-nlo500)" data-from="pm:www.acme.com#4" data-to="pd:www.acme.com:static-assets.prod:80"/>
+<path class="edge routes" d="M 673 270 C 701 270, 701 270, 729 270" marker-end="url(#arr-nlo500)" data-from="pm:www.acme.com#5" data-to="pd:www.acme.com:direct:200"/>
+<path class="edge routes" d="M 673 308 C 701 308, 701 308, 729 308" marker-end="url(#arr-nlo500)" data-from="pm:www.acme.com#6" data-to="pd:www.acme.com:redirect:301:/"/>
+<path class="edge routes" d="M 673 353 C 701 353, 701 128, 729 128" marker-end="url(#arr-nlo500)" data-from="pm:www.acme.com#7" data-to="pd:www.acme.com:web.prod:80(stable)"/><text class="edge-label routes" x="701" y="236.5" text-anchor="middle">90%</text>
+<path class="edge routes" d="M 673 353 C 701 353, 701 31, 729 31" marker-end="url(#arr-nlo500)" data-from="pm:www.acme.com#7" data-to="pd:www.acme.com:web.prod:80(canary)"/><text class="edge-label routes" x="701" y="188" text-anchor="middle">10%</text>
+<path class="edge routes" d="M 673 405 C 701 405, 701 405, 729 405" marker-end="url(#arr-nlo500)" data-from="pm:www.acme.com#8" data-to="pd:www.acme.com:search.prod:8080"/>
+<path class="edge evaluates" d="M 248 218 C 276 218, 272 31, 300 31" marker-end="url(#arr-nlo500)" data-from="ph:www.acme.com" data-to="pm:www.acme.com#0"/>
+<path class="edge evaluates" d="M 248 218 C 276 218, 272 83, 300 83" marker-end="url(#arr-nlo500)" data-from="ph:www.acme.com" data-to="pm:www.acme.com#1"/>
+<path class="edge evaluates" d="M 248 218 C 276 218, 272 128, 300 128" marker-end="url(#arr-nlo500)" data-from="ph:www.acme.com" data-to="pm:www.acme.com#2"/>
+<path class="edge evaluates" d="M 248 218 C 276 218, 272 173, 300 173" marker-end="url(#arr-nlo500)" data-from="ph:www.acme.com" data-to="pm:www.acme.com#3"/>
+<path class="edge evaluates" d="M 248 218 C 276 218, 272 225, 300 225" marker-end="url(#arr-nlo500)" data-from="ph:www.acme.com" data-to="pm:www.acme.com#4"/>
+<path class="edge evaluates" d="M 248 218 C 276 218, 272 270, 300 270" marker-end="url(#arr-nlo500)" data-from="ph:www.acme.com" data-to="pm:www.acme.com#5"/>
+<path class="edge evaluates" d="M 248 218 C 276 218, 272 308, 300 308" marker-end="url(#arr-nlo500)" data-from="ph:www.acme.com" data-to="pm:www.acme.com#6"/>
+<path class="edge evaluates" d="M 248 218 C 276 218, 272 353, 300 353" marker-end="url(#arr-nlo500)" data-from="ph:www.acme.com" data-to="pm:www.acme.com#7"/>
+<path class="edge evaluates" d="M 248 218 C 276 218, 272 405, 300 405" marker-end="url(#arr-nlo500)" data-from="ph:www.acme.com" data-to="pm:www.acme.com#8"/>
+<g class="node dest" data-id="pd:www.acme.com:web.prod:80(canary)" data-kind="dest"><title>web.prod:80(canary)</title><rect x="729" y="17" width="170" height="28" rx="6"/><text class="title" x="736" y="34">web.prod:80(canary)</text></g>
+<g class="node rule" data-id="pm:www.acme.com#0" data-kind="rule"><title>* {!header x-opt-out, header x-acme-channel~beta|canary}
+CORS  fault
+from prod/storefront</title><rect x="300" y="10" width="373" height="42" rx="6"/><text class="match" x="325" y="27">* {!header x-opt-out, header x-acme-channel~beta|canary}</text><text class="badge" x="307" y="41">CORS  fault</text></g>
+<g class="node rule" data-id="pm:www.acme.com#1" data-kind="rule"><title>* {header cookie^=acme_beta=}
+CORS  fault
+from prod/storefront</title><rect x="300" y="62" width="373" height="42" rx="6"/><text class="match" x="325" y="79">* {header cookie^=acme_beta=}</text><text class="badge" x="307" y="93">CORS  fault</text></g>
+<g class="node dest" data-id="pd:www.acme.com:web.prod:80(stable)" data-kind="dest"><title>web.prod:80(stable)</title><rect x="729" y="114" width="170" height="28" rx="6"/><text class="title" x="736" y="131">web.prod:80(stable)</text></g>
+<g class="node rule" data-id="pm:www.acme.com#2" data-kind="rule"><title>/*
+from prod/storefront</title><rect x="300" y="114" width="373" height="28" rx="6"/><text class="match" x="325" y="131">/*</text></g>
+<g class="node rule" data-id="pm:www.acme.com#3" data-kind="rule"><title>/account* {method~GET|HEAD}
+headers  rewrite regex
+from prod/storefront</title><rect x="300" y="152" width="373" height="42" rx="6"/><text class="match" x="325" y="169">/account* {method~GET|HEAD}</text><text class="badge" x="307" y="183">headers  rewrite regex</text></g>
+<g class="node dest" data-id="pd:www.acme.com:static-assets.prod:80" data-kind="dest"><title>static-assets.prod:80</title><rect x="729" y="211" width="170" height="28" rx="6"/><text class="title" x="736" y="228">static-assets.prod:80</text></g>
+<g class="node rule" data-id="pm:www.acme.com#4" data-kind="rule"><title>/assets*
+headers  rewrite /  timeout 3s
+from prod/storefront</title><rect x="300" y="204" width="373" height="42" rx="6"/><text class="match" x="325" y="221">/assets*</text><text class="badge" x="307" y="235">headers  rewrite /  timeout 3s</text></g>
+<g class="node dest terminal" data-id="pd:www.acme.com:direct:200" data-kind="dest"><title>direct:200</title><rect x="729" y="256" width="170" height="28" rx="6"/><text class="title" x="736" y="273">direct:200</text></g>
+<g class="node rule" data-id="pm:www.acme.com#5" data-kind="rule"><title>/healthz
+from prod/storefront</title><rect x="300" y="256" width="373" height="28" rx="6"/><text class="match" x="325" y="273">/healthz</text></g>
+<g class="node dest terminal" data-id="pd:www.acme.com:redirect:301:/" data-kind="dest"><title>redirect:301:/</title><rect x="729" y="294" width="170" height="28" rx="6"/><text class="title" x="736" y="311">redirect:301:/</text></g>
+<g class="node rule" data-id="pm:www.acme.com#6" data-kind="rule"><title>/home
+from prod/storefront</title><rect x="300" y="294" width="373" height="28" rx="6"/><text class="match" x="325" y="311">/home</text></g>
+<g class="node rule" data-id="pm:www.acme.com#7" data-kind="rule"><title>/shop*
+retry 3x
+from prod/storefront</title><rect x="300" y="332" width="373" height="42" rx="6"/><text class="match" x="325" y="349">/shop*</text><text class="badge" x="307" y="363">retry 3x</text></g>
+<g class="node dest" data-id="pd:www.acme.com:search.prod:8080" data-kind="dest"><title>search.prod:8080</title><rect x="729" y="391" width="170" height="28" rx="6"/><text class="title" x="736" y="408">search.prod:8080</text></g>
+<g class="node rule" data-id="pm:www.acme.com#8" data-kind="rule"><title>~/search/[a-z0-9-]+ {?debug, ?page=1, ?q~.+}
+mirror recommendations.prod:8080=25%
+from prod/storefront</title><rect x="300" y="384" width="373" height="42" rx="6"/><text class="regex" x="325" y="401">~/search/[a-z0-9-]+ {?debug, ?page=1, ?q~.+}</text><text class="badge" x="307" y="415">mirror recommendations.prod:8080=25%</text></g>
+<g class="node host" data-id="ph:www.acme.com" data-kind="host"><title>www.acme.com
+via istio-system/public-gateway:443
+via istio-system/public-gateway:80</title><rect x="10" y="190" width="238" height="56" rx="6"/><text class="title" x="17" y="207">www.acme.com</text><text class="dim" x="17" y="221">via istio-system/public-gateway:443</text><text class="dim" x="17" y="235">via istio-system/public-gateway:80</text></g>
+</svg></div></div></div>
+      <div id="paths-table"><div class="pgroup" data-host="*.tenants.acme.com" data-gws="public-gateway" data-ns="prod"><h3>*.tenants.acme.com</h3><div class="via">via istio-system/public-gateway:443, istio-system/public-gateway:80</div><table><tr data-rule="rule:prod/tenant-sites#1" data-uri="" data-regex="0" data-dests="web.prod:80(stable)" title="from prod/tenant-sites"><td class="pmatch">*</td><td class="parrow">→</td><td class="pdests">web.prod:80(stable)</td><td class="pmods"></td></tr>
+<tr data-rule="rule:prod/tenant-sites#0" data-uri="/app" data-regex="0" data-dests="web.prod:80(stable)" title="from prod/tenant-sites"><td class="pmatch">/app* {authority~[a-z0-9-]+\.tenants\.acme\.com}</td><td class="parrow">→</td><td class="pdests">web.prod:80(stable)</td><td class="pmods"></td></tr></table></div>
+<div class="pgroup" data-host="acme.com" data-gws="public-gateway" data-ns="prod"><h3>acme.com</h3><div class="via">via istio-system/public-gateway:443, istio-system/public-gateway:80</div><table><tr data-rule="rule:prod/apex-redirect#0" data-uri="/" data-regex="0" data-dests="redirect:301:https://www.acme.com/" title="from prod/apex-redirect"><td class="pmatch">/*</td><td class="parrow">→</td><td class="pdests">redirect:301:https://www.acme.com/</td><td class="pmods"></td></tr></table></div>
+<div class="pgroup" data-host="api.acme.com" data-gws="api-gateway" data-ns="prod"><h3>api.acme.com</h3><div class="via">via istio-system/api-gateway:443</div><table><tr data-rule="rule:prod/api-routes#5" data-uri="/v1" data-regex="0" data-dests="redirect:302:/v2" title="from prod/api-routes"><td class="pmatch">/v1*</td><td class="parrow">→</td><td class="pdests">redirect:302:/v2</td><td class="pmods"></td></tr>
+<tr data-rule="rule:prod/api-routes#4" data-uri="/v2" data-regex="0" data-dests="api.prod:8080(v1)" title="from prod/api-routes"><td class="pmatch">/v2*</td><td class="parrow">→</td><td class="pdests">api.prod:8080(v1)</td><td class="pmods">mirror api-shadow.prod:8080=10%, rewrite /</td></tr>
+<tr data-rule="rule:prod/api-routes#0" data-uri="/v2" data-regex="0" data-dests="api.prod:8080(v2)=80% api.prod:8080(v3)=20%" title="from prod/api-routes"><td class="pmatch">/v2* {header x-canary=true, method=POST}</td><td class="parrow">→</td><td class="pdests">api.prod:8080(v2)=80% api.prod:8080(v3)=20%</td><td class="pmods">mirror api-shadow.prod:8080, retry 3x, timeout 5s</td></tr>
+<tr data-rule="rule:prod/api-routes#1" data-uri="/v2/cart" data-regex="0" data-dests="cart.prod:8080" title="from prod/api-routes"><td class="pmatch">/v2/cart* {header authorization, scheme=https}</td><td class="parrow">→</td><td class="pdests">cart.prod:8080</td><td class="pmods"></td></tr>
+<tr data-rule="rule:prod/api-routes#2" data-uri="/v2/catalog" data-regex="0" data-dests="catalog.prod:8080" title="from prod/api-routes"><td class="pmatch">/v2/catalog* {?category~.+}</td><td class="parrow">→</td><td class="pdests">catalog.prod:8080</td><td class="pmods"></td></tr>
+<tr data-rule="rule:prod/api-routes#3" data-uri="/v2/payments" data-regex="0" data-dests="payments.payments:8080(v2)" title="from prod/api-routes"><td class="pmatch">/v2/payments* {port=443}</td><td class="parrow">→</td><td class="pdests">payments.payments:8080(v2)</td><td class="pmods"></td></tr></table></div>
+<div class="pgroup" data-host="grpc.acme.com" data-gws="grpc-gateway" data-ns="prod"><h3>grpc.acme.com</h3><div class="via">via istio-system/grpc-gateway:8443</div><table><tr data-rule="rule:prod/grpc-routes#1" data-uri="" data-regex="0" data-dests="api.prod:9090" title="from prod/grpc-routes"><td class="pmatch">*</td><td class="parrow">→</td><td class="pdests">api.prod:9090</td><td class="pmods"></td></tr>
+<tr data-rule="rule:prod/grpc-routes#0" data-uri="/acme.orders.v1.Orders/" data-regex="0" data-dests="api.prod:9090" title="from prod/grpc-routes"><td class="pmatch">/acme.orders.v1.Orders/*</td><td class="parrow">→</td><td class="pdests">api.prod:9090</td><td class="pmods">retry 2x, timeout 10s</td></tr></table></div>
+<div class="pgroup" data-host="internal.acme.com" data-gws="public-gateway" data-ns="prod"><h3>internal.acme.com</h3><div class="via">via istio-system/public-gateway:443, istio-system/public-gateway:80, istio-system/public-gateway:8080</div><table><tr data-rule="rule:prod/internal-portal#1" data-uri="" data-regex="0" data-dests="internal-portal.prod:8080" title="from prod/internal-portal"><td class="pmatch">*</td><td class="parrow">→</td><td class="pdests">internal-portal.prod:8080</td><td class="pmods"></td></tr>
+<tr data-rule="rule:prod/internal-portal#0" data-uri="/" data-regex="0" data-dests="internal-portal.prod:8080" title="from prod/internal-portal"><td class="pmatch">/* {sourceLabel team=platform}</td><td class="parrow">→</td><td class="pdests">internal-portal.prod:8080</td><td class="pmods"></td></tr></table></div>
+<div class="pgroup" data-host="inventory" data-gws="" data-ns="internal"><h3>inventory</h3><div class="via">via mesh</div><table><tr data-rule="rule:internal/inventory-mesh#0" data-uri="/read" data-regex="0" data-dests="inventory.internal:8080" title="from internal/inventory-mesh"><td class="pmatch">/read* {method~GET|HEAD}</td><td class="parrow">→</td><td class="pdests">inventory.internal:8080</td><td class="pmods">timeout 1s</td></tr>
+<tr data-rule="rule:internal/inventory-mesh#1" data-uri="/write" data-regex="0" data-dests="inventory.internal:8080" title="from internal/inventory-mesh"><td class="pmatch">/write* {method=POST}</td><td class="parrow">→</td><td class="pdests">inventory.internal:8080</td><td class="pmods">retry 2x</td></tr></table></div>
+<div class="pgroup" data-host="notifications" data-gws="" data-ns="internal"><h3>notifications</h3><div class="via">via mesh</div><table><tr data-rule="rule:internal/notifications-mesh#0" data-uri="" data-regex="0" data-dests="notifications.internal:8080" title="from internal/notifications-mesh"><td class="pmatch">*</td><td class="parrow">→</td><td class="pdests">notifications.internal:8080</td><td class="pmods"></td></tr></table></div>
+<div class="pgroup" data-host="orders" data-gws="" data-ns="internal"><h3>orders</h3><div class="via">via mesh</div><table><tr data-rule="rule:internal/orders-mesh#1" data-uri="" data-regex="0" data-dests="orders.internal:8080(v1)" title="from internal/orders-mesh"><td class="pmatch">*</td><td class="parrow">→</td><td class="pdests">orders.internal:8080(v1)</td><td class="pmods">fault</td></tr>
+<tr data-rule="rule:internal/orders-mesh#0" data-uri="" data-regex="0" data-dests="orders.internal:8080(v2)" title="from internal/orders-mesh"><td class="pmatch">* {header x-experiment=orders-v2}</td><td class="parrow">→</td><td class="pdests">orders.internal:8080(v2)</td><td class="pmods"></td></tr></table></div>
+<div class="pgroup" data-host="stream.acme.com" data-gws="grpc-gateway" data-ns="prod"><h3>stream.acme.com</h3><div class="via">via istio-system/grpc-gateway:9090</div><table><tr data-rule="rule:prod/stream-routes#0" data-uri="" data-regex="0" data-dests="stream.prod:9090" title="from prod/stream-routes"><td class="pmatch">*</td><td class="parrow">→</td><td class="pdests">stream.prod:9090</td><td class="pmods"></td></tr></table></div>
+<div class="pgroup" data-host="www.acme.com" data-gws="public-gateway" data-ns="prod"><h3>www.acme.com</h3><div class="via">via istio-system/public-gateway:443, istio-system/public-gateway:80</div><table><tr data-rule="rule:prod/storefront#5" data-uri="" data-regex="0" data-dests="web.prod:80(canary)" title="from prod/storefront"><td class="pmatch">* {!header x-opt-out, header x-acme-channel~beta|canary}</td><td class="parrow">→</td><td class="pdests">web.prod:80(canary)</td><td class="pmods">CORS, fault</td></tr>
+<tr data-rule="rule:prod/storefront#5" data-uri="" data-regex="0" data-dests="web.prod:80(canary)" title="from prod/storefront"><td class="pmatch">* {header cookie^=acme_beta=}</td><td class="parrow">→</td><td class="pdests">web.prod:80(canary)</td><td class="pmods">CORS, fault</td></tr>
+<tr data-rule="rule:prod/storefront#7" data-uri="/" data-regex="0" data-dests="web.prod:80(stable)" title="from prod/storefront"><td class="pmatch">/*</td><td class="parrow">→</td><td class="pdests">web.prod:80(stable)</td><td class="pmods"></td></tr>
+<tr data-rule="rule:prod/storefront#6" data-uri="/account" data-regex="0" data-dests="web.prod:80(stable)" title="from prod/storefront"><td class="pmatch">/account* {method~GET|HEAD}</td><td class="parrow">→</td><td class="pdests">web.prod:80(stable)</td><td class="pmods">headers, rewrite regex</td></tr>
+<tr data-rule="rule:prod/storefront#2" data-uri="/assets" data-regex="0" data-dests="static-assets.prod:80" title="from prod/storefront"><td class="pmatch">/assets*</td><td class="parrow">→</td><td class="pdests">static-assets.prod:80</td><td class="pmods">headers, rewrite /, timeout 3s</td></tr>
+<tr data-rule="rule:prod/storefront#0" data-uri="/healthz" data-regex="0" data-dests="direct:200" title="from prod/storefront"><td class="pmatch">/healthz</td><td class="parrow">→</td><td class="pdests">direct:200</td><td class="pmods"></td></tr>
+<tr data-rule="rule:prod/storefront#1" data-uri="/home" data-regex="0" data-dests="redirect:301:/" title="from prod/storefront"><td class="pmatch">/home</td><td class="parrow">→</td><td class="pdests">redirect:301:/</td><td class="pmods"></td></tr>
+<tr data-rule="rule:prod/storefront#3" data-uri="/shop" data-regex="0" data-dests="web.prod:80(stable)=90% web.prod:80(canary)=10%" title="from prod/storefront"><td class="pmatch">/shop*</td><td class="parrow">→</td><td class="pdests">web.prod:80(stable)=90% web.prod:80(canary)=10%</td><td class="pmods">retry 3x</td></tr>
+<tr data-rule="rule:prod/storefront#4" data-uri="/search/[a-z0-9-]+" data-regex="1" data-dests="search.prod:8080" title="from prod/storefront"><td class="pmatch">~/search/[a-z0-9-]+ {?debug, ?page=1, ?q~.+}</td><td class="parrow">→</td><td class="pdests">search.prod:8080</td><td class="pmods">mirror recommendations.prod:8080=25%</td></tr></table></div></div>
+    </div>
+  </div>
+  <div id="aside-wrap">
+    <button id="toggle-aside" aria-label="toggle findings panel" title="show/hide findings panel" aria-expanded="true">
+      <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline id="toggle-chev" points="6,1 1,7 6,13"/></svg>
+    </button>
+    <aside>
+      <div id="findings-section">
+        <details class="l4"><summary>L4 routes not diagrammed (4)</summary><ul><li>gateway istio-system/edge-l4-gateway server :15443 (TLS) is not HTTP — VirtualService http routes will not bind to it</li><li>gateway istio-system/edge-l4-gateway server :3306 (TCP) is not HTTP — VirtualService http routes will not bind to it</li><li>VirtualService prod/db-proxy contains tcp/tls route blocks (L4, not diagrammed)</li><li>VirtualService prod/secure-passthrough contains tcp/tls route blocks (L4, not diagrammed)</li></ul></details>
+        <h3>Findings (4)</h3>
+        <ul id="findings"><li class="finding warn" data-nodes="" data-idx="0"><span class="fid">W001</span> VirtualService prod/db-proxy hosts [db.acme.com] have empty intersection with gateway istio-system/edge-l4-gateway hosts — its rules can never receive traffic via this gateway <span class="floc">testdata/acme/30-l4.yaml:11</span></li>
+<li class="finding warn" data-nodes="" data-idx="1"><span class="fid">W001</span> VirtualService prod/secure-passthrough hosts [secure.acme.com] have empty intersection with gateway istio-system/edge-l4-gateway hosts — its rules can never receive traffic via this gateway <span class="floc">testdata/acme/30-l4.yaml:30</span></li>
+<li class="finding info" data-nodes="host:listener:istio-system/api-gateway#0/prod/api-routes" data-idx="2"><span class="fid">I001</span> prod/api-routes: no catch-all rule — unmatched requests will get 404 <span class="floc">testdata/acme/11-vs-api.yaml:9</span></li>
+<li class="finding info" data-nodes="host:mesh/internal/inventory-mesh" data-idx="3"><span class="fid">I001</span> mesh routing internal/inventory-mesh: no catch-all rule — unmatched requests fall through to default service routing <span class="floc">testdata/acme/20-mesh.yaml:47</span></li></ul>
+      </div>
+      <div id="details-section">
+        <h3>Details</h3>
+        <div id="panel"><p class="empty">Click a node for details; hover to trace its path.</p></div>
+      </div>
+    </aside>
+  </div>
+</main>
+<script type="application/json" id="model-data">{"panels":{"listener:istio-system/public-gateway#0":{"title":"gateway istio-system/public-gateway","kind":"listener","rows":[["port","443 (https)"],["protocol","HTTPS"],["TLS mode","SIMPLE"],["hosts","acme.com, www.acme.com, *.acme.com"]],"loc":"testdata/acme/00-gateways.yaml:19","findings":[]},"listener:istio-system/public-gateway#1":{"title":"gateway istio-system/public-gateway","kind":"listener","rows":[["port","80 (http)"],["protocol","HTTP"],["hosts","acme.com, www.acme.com, *.acme.com"]],"loc":"testdata/acme/00-gateways.yaml:31","findings":[]},"listener:istio-system/public-gateway#2":{"title":"gateway istio-system/public-gateway","kind":"listener","rows":[["port","8080 (http-internal)"],["protocol","HTTP"],["hosts","internal.acme.com"]],"loc":"testdata/acme/00-gateways.yaml:40","findings":[]},"listener:istio-system/api-gateway#0":{"title":"gateway istio-system/api-gateway","kind":"listener","rows":[["port","443 (https-api)"],["protocol","HTTPS"],["TLS mode","MUTUAL"],["hosts","api.acme.com"]],"loc":"testdata/acme/00-gateways.yaml:57","findings":[]},"listener:istio-system/grpc-gateway#0":{"title":"gateway istio-system/grpc-gateway","kind":"listener","rows":[["port","8443 (grpc-tls)"],["protocol","GRPC"],["TLS mode","SIMPLE"],["hosts","grpc.acme.com"]],"loc":"testdata/acme/00-gateways.yaml:77","findings":[]},"listener:istio-system/grpc-gateway#1":{"title":"gateway istio-system/grpc-gateway","kind":"listener","rows":[["port","9090 (h2c)"],["protocol","HTTP2"],["hosts","stream.acme.com"]],"loc":"testdata/acme/00-gateways.yaml:86","findings":[]},"listener:istio-system/edge-l4-gateway#0":{"title":"gateway istio-system/edge-l4-gateway","kind":"listener","rows":[["port","15443 (tls-passthrough)"],["protocol","TLS"],["TLS mode","PASSTHROUGH"],["hosts","secure.acme.com"]],"loc":"testdata/acme/00-gateways.yaml:103","findings":[]},"listener:istio-system/edge-l4-gateway#1":{"title":"gateway istio-system/edge-l4-gateway","kind":"listener","rows":[["port","3306 (mysql)"],["protocol","TCP"],["hosts","db.acme.com"]],"loc":"testdata/acme/00-gateways.yaml:112","findings":[]},"rule:prod/apex-redirect#0":{"uriVals":["/"],"uriRegexes":[],"title":"rule #1 of prod/apex-redirect (apex-to-www)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","URI prefix /"],["⤳ redirect","redirect → https://www.acme.com/ (HTTP 301)"]],"yaml":"name: apex-to-www\nmatch:\n- uri:\n    prefix: /\nredirect:\n  uri: /\n  authority: www.acme.com\n  scheme: https\n  redirectCode: 301","loc":"testdata/acme/10-vs-web.yaml:29","findings":[]},"rule:prod/apex-redirect#0/redirect":{"title":"HTTP 301 → https://www.acme.com/","kind":"dest","rows":[["type","redirect"]],"loc":"testdata/acme/10-vs-web.yaml:29","findings":[]},"rule:prod/storefront#0":{"uriVals":["/healthz"],"uriRegexes":[],"title":"rule #1 of prod/storefront (healthz)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","URI exact /healthz"],["▣ directResponse","direct response with status 200"]],"yaml":"name: healthz\nmatch:\n- uri:\n    exact: /healthz\ndirectResponse:\n  status: 200\n  body:\n    string: \"ok\"","loc":"testdata/acme/10-vs-web.yaml:51","findings":[]},"rule:prod/storefront#0/direct":{"title":"direct response 200","kind":"dest","rows":[["type","direct"]],"loc":"testdata/acme/10-vs-web.yaml:51","findings":[]},"rule:prod/storefront#1":{"uriVals":["/home"],"uriRegexes":[],"title":"rule #2 of prod/storefront (legacy-home)","kind":"rule","rows":[["evaluation order","#2 (first match wins)"],["match","URI exact /home"],["⤳ redirect","redirect → (same host)/ (HTTP 301)"]],"yaml":"name: legacy-home\nmatch:\n- uri:\n    exact: /home\nredirect:\n  uri: /\n  redirectCode: 301","loc":"testdata/acme/10-vs-web.yaml:61","findings":[]},"rule:prod/storefront#1/redirect":{"title":"HTTP 301 → /","kind":"dest","rows":[["type","redirect"]],"loc":"testdata/acme/10-vs-web.yaml:61","findings":[]},"rule:prod/storefront#2":{"uriVals":["/assets"],"uriRegexes":[],"title":"rule #3 of prod/storefront (assets)","kind":"rule","rows":[["evaluation order","#3 (first match wins)"],["match","URI prefix /assets"],["✂ rewrite","rewrite: uri → /"],["⏱ timeout","request timeout 3s"],["≡ headers","request/response header manipulation"]],"yaml":"name: assets\nmatch:\n- uri:\n    prefix: /assets\nrewrite:\n  uri: /\ntimeout: 3s\nheaders:\n  response:\n    set:\n      cache-control: \"public, max-age=31536000\"\nroute:\n- destination:\n    host: static-assets\n    port:\n      number: 80","loc":"testdata/acme/10-vs-web.yaml:71","findings":[]},"dest:static-assets.prod.svc.cluster.local:80:-":{"title":"static-assets.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","80"]],"loc":"testdata/acme/01-services.yaml:29","findings":[]},"rule:prod/storefront#3":{"uriVals":["/shop"],"uriRegexes":[],"title":"rule #4 of prod/storefront (web-canary-split)","kind":"rule","rows":[["evaluation order","#4 (first match wins)"],["match","URI prefix /shop"],["↻ retries","retries: 3 attempts (perTryTimeout 2s, on 5xx,gateway-error,connect-failure)"]],"yaml":"name: web-canary-split\nmatch:\n- uri:\n    prefix: /shop\nretries:\n  attempts: 3\n  perTryTimeout: 2s\n  retryOn: 5xx,gateway-error,connect-failure\nroute:\n- destination:\n    host: web\n    subset: stable\n    port:\n      number: 80\n  weight: 90\n- destination:\n    host: web\n    subset: canary\n    port:\n      number: 80\n  weight: 10","loc":"testdata/acme/10-vs-web.yaml:89","findings":[]},"dest:web.prod.svc.cluster.local:80:stable":{"title":"web.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","80"],["subset","stable"],["subset labels","track=stable"]],"loc":"testdata/acme/01-services.yaml:7","findings":[]},"dest:web.prod.svc.cluster.local:80:canary":{"title":"web.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","80"],["subset","canary"],["subset labels","track=canary"]],"loc":"testdata/acme/01-services.yaml:7","findings":[]},"rule:prod/storefront#4":{"uriVals":[],"uriRegexes":["/search/[a-z0-9-]+"],"title":"rule #5 of prod/storefront (search)","kind":"rule","rows":[["evaluation order","#5 (first match wins)"],["match","URI regex /search/[a-z0-9-]+ (case-insensitive) AND ?q regex .+ AND ?page=1 AND ?debug present"],["🪞 mirror","mirrors traffic to recommendations"]],"yaml":"name: search\nmatch:\n- uri:\n    regex: \"/search/[a-z0-9-]+\"\n  queryParams:\n    q:\n      regex: \".+\"\n    page:\n      exact: \"1\"\n    debug: {}\n  ignoreUriCase: true\nroute:\n- destination:\n    host: search\n    port:\n      number: 8080\nmirror:\n  host: recommendations\n  port:\n    number: 8080\nmirrorPercentage:\n  value: 25","loc":"testdata/acme/10-vs-web.yaml:113","findings":[]},"dest:search.prod.svc.cluster.local:8080:-":{"title":"search.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"]],"loc":"testdata/acme/01-services.yaml:86","findings":[]},"dest:recommendations.prod.svc.cluster.local:8080:-":{"title":"recommendations.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"]],"loc":"testdata/acme/01-services.yaml:97","findings":[]},"rule:prod/storefront#5":{"uriVals":[],"uriRegexes":[],"title":"rule #6 of prod/storefront (beta-experience)","kind":"rule","rows":[["evaluation order","#6 (first match wins)"],["match","header x-acme-channel regex beta|canary AND header x-opt-out absent  OR  header cookie prefix acme_beta="],["⚡ fault","fault injection: delay 5s @ 1%; abort 503 @ 0.5%"],["◌ cors","CORS policy attached"]],"yaml":"name: beta-experience\nmatch:\n- headers:\n    x-acme-channel:\n      regex: \"beta|canary\"\n  withoutHeaders:\n    x-opt-out: {}\n- headers:\n    cookie:\n      prefix: \"acme_beta=\"\ncorsPolicy:\n  allowOrigins:\n  - exact: https://www.acme.com\n  allowMethods: [GET, POST, OPTIONS]\n  allowHeaders: [authorization, content-type]\n  maxAge: 24h\nfault:\n  delay:\n    fixedDelay: 5s\n    percentage:\n      value: 1\n  abort:\n    httpStatus: 503\n    percentage:\n      value: 0.5\nroute:\n- destination:\n    host: web\n    subset: canary\n    port:\n      number: 80","loc":"testdata/acme/10-vs-web.yaml:139","findings":[]},"rule:prod/storefront#6":{"uriVals":["/account"],"uriRegexes":[],"title":"rule #7 of prod/storefront (account)","kind":"rule","rows":[["evaluation order","#7 (first match wins)"],["match","URI prefix /account AND method GET|HEAD"],["✂ rewrite","rewrite: uri regex ^/account(/.*)?$ → /u\\1"],["≡ headers","request/response header manipulation"]],"yaml":"name: account\nmatch:\n- uri:\n    prefix: /account\n  method:\n    regex: \"GET|HEAD\"\nrewrite:\n  uriRegexRewrite:\n    match: \"^/account(/.*)?$\"\n    rewrite: \"/u\\\\1\"\nheaders:\n  request:\n    add:\n      x-acme-edge: \"public-gateway\"\n    remove:\n    - x-internal-debug\nroute:\n- destination:\n    host: web\n    subset: stable\n    port:\n      number: 80","loc":"testdata/acme/10-vs-web.yaml:173","findings":[]},"rule:prod/storefront#7":{"uriVals":["/"],"uriRegexes":[],"title":"rule #8 of prod/storefront (fallback)","kind":"rule","rows":[["evaluation order","#8 (first match wins)"],["match","URI prefix /"]],"yaml":"name: fallback\nmatch:\n- uri:\n    prefix: /\nroute:\n- destination:\n    host: web\n    subset: stable\n    port:\n      number: 80","loc":"testdata/acme/10-vs-web.yaml:197","findings":[]},"rule:prod/tenant-sites#0":{"uriVals":["/app"],"uriRegexes":[],"title":"rule #1 of prod/tenant-sites (tenant-home)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","URI prefix /app AND authority regex [a-z0-9-]+\\.tenants\\.acme\\.com"]],"yaml":"name: tenant-home\nmatch:\n- uri:\n    prefix: /app\n  authority:\n    regex: \"[a-z0-9-]+\\\\.tenants\\\\.acme\\\\.com\"\nroute:\n- destination:\n    host: web\n    subset: stable\n    port:\n      number: 80","loc":"testdata/acme/10-vs-web.yaml:222","findings":[]},"rule:prod/tenant-sites#1":{"uriVals":[],"uriRegexes":[],"title":"rule #2 of prod/tenant-sites (tenant-default)","kind":"rule","rows":[["evaluation order","#2 (first match wins)"],["match","(catch-all)"]],"yaml":"name: tenant-default\nroute:\n- destination:\n    host: web\n    subset: stable\n    port:\n      number: 80","loc":"testdata/acme/10-vs-web.yaml:234","findings":[]},"rule:prod/internal-portal#0":{"uriVals":["/"],"uriRegexes":[],"title":"rule #1 of prod/internal-portal (portal)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","URI prefix / AND sourceLabels team=platform"]],"yaml":"name: portal\nmatch:\n- uri:\n    prefix: /\n  sourceLabels:\n    team: platform\nroute:\n- destination:\n    host: internal-portal\n    port:\n      number: 8080","loc":"testdata/acme/10-vs-web.yaml:256","findings":[]},"dest:internal-portal.prod.svc.cluster.local:8080:-":{"title":"internal-portal.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"]],"loc":"testdata/acme/01-services.yaml:119","findings":[]},"rule:prod/internal-portal#1":{"uriVals":[],"uriRegexes":[],"title":"rule #2 of prod/internal-portal (portal-default)","kind":"rule","rows":[["evaluation order","#2 (first match wins)"],["match","(catch-all)"]],"yaml":"name: portal-default\nroute:\n- destination:\n    host: internal-portal\n    port:\n      number: 8080","loc":"testdata/acme/10-vs-web.yaml:267","findings":[]},"rule:prod/api-routes#0":{"uriVals":["/v2"],"uriRegexes":[],"title":"rule #1 of prod/api-routes (api-v2-canary)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","URI prefix /v2 AND method POST AND header x-canary exact true"],["⏱ timeout","request timeout 5s"],["↻ retries","retries: 3 attempts (perTryTimeout 1s, on 5xx,reset)"],["🪞 mirror","mirrors traffic to api-shadow"]],"yaml":"name: api-v2-canary\nmatch:\n- uri:\n    prefix: /v2\n  headers:\n    x-canary:\n      exact: \"true\"\n  method:\n    exact: POST\ntimeout: 5s\nretries:\n  attempts: 3\n  perTryTimeout: 1s\n  retryOn: 5xx,reset\nroute:\n- destination:\n    host: api\n    subset: v2\n    port:\n      number: 8080\n  weight: 80\n- destination:\n    host: api\n    subset: v3\n    port:\n      number: 8080\n  weight: 20\nmirror:\n  host: api-shadow\n  port:\n    number: 8080","loc":"testdata/acme/11-vs-api.yaml:21","findings":[]},"dest:api.prod.svc.cluster.local:8080:v2":{"title":"api.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"],["subset","v2"],["subset labels","version=v2"]],"loc":"testdata/acme/01-services.yaml:41","findings":[]},"dest:api.prod.svc.cluster.local:8080:v3":{"title":"api.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"],["subset","v3"],["subset labels","version=v3"]],"loc":"testdata/acme/01-services.yaml:41","findings":[]},"dest:api-shadow.prod.svc.cluster.local:8080:-":{"title":"api-shadow.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"]],"loc":"testdata/acme/01-services.yaml:53","findings":[]},"rule:prod/api-routes#1":{"uriVals":["/v2/cart"],"uriRegexes":[],"title":"rule #2 of prod/api-routes (cart)","kind":"rule","rows":[["evaluation order","#2 (first match wins)"],["match","URI prefix /v2/cart AND scheme exact https AND header authorization present"]],"yaml":"name: cart\nmatch:\n- uri:\n    prefix: /v2/cart\n  scheme:\n    exact: https\n  headers:\n    authorization: {}\nroute:\n- destination:\n    host: cart\n    port:\n      number: 8080","loc":"testdata/acme/11-vs-api.yaml:55","findings":[]},"dest:cart.prod.svc.cluster.local:8080:-":{"title":"cart.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"]],"loc":"testdata/acme/01-services.yaml:64","findings":[]},"rule:prod/api-routes#2":{"uriVals":["/v2/catalog"],"uriRegexes":[],"title":"rule #3 of prod/api-routes (catalog)","kind":"rule","rows":[["evaluation order","#3 (first match wins)"],["match","URI prefix /v2/catalog AND ?category regex .+"]],"yaml":"name: catalog\nmatch:\n- uri:\n    prefix: /v2/catalog\n  queryParams:\n    category:\n      regex: \".+\"\nroute:\n- destination:\n    host: catalog\n    port:\n      number: 8080","loc":"testdata/acme/11-vs-api.yaml:70","findings":[]},"dest:catalog.prod.svc.cluster.local:8080:-":{"title":"catalog.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"]],"loc":"testdata/acme/01-services.yaml:75","findings":[]},"rule:prod/api-routes#3":{"uriVals":["/v2/payments"],"uriRegexes":[],"title":"rule #4 of prod/api-routes (payments)","kind":"rule","rows":[["evaluation order","#4 (first match wins)"],["match","URI prefix /v2/payments AND port 443"]],"yaml":"name: payments\nmatch:\n- uri:\n    prefix: /v2/payments\n  port: 443\nroute:\n- destination:\n    host: payments.payments.svc.cluster.local\n    subset: v2\n    port:\n      number: 8080","loc":"testdata/acme/11-vs-api.yaml:84","findings":[]},"dest:payments.payments.svc.cluster.local:8080:v2":{"title":"payments.payments.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"],["subset","v2"],["subset labels","version=v2"]],"loc":"testdata/acme/01-services.yaml:142","findings":[]},"rule:prod/api-routes#4":{"uriVals":["/v2"],"uriRegexes":[],"title":"rule #5 of prod/api-routes (api-v2)","kind":"rule","rows":[["evaluation order","#5 (first match wins)"],["match","URI prefix /v2"],["✂ rewrite","rewrite: uri → /"],["🪞 mirror","mirrors traffic to api-shadow"]],"yaml":"name: api-v2\nmatch:\n- uri:\n    prefix: /v2\nrewrite:\n  uri: /\nroute:\n- destination:\n    host: api\n    subset: v1\n    port:\n      number: 8080\nmirror:\n  host: api-shadow\n  port:\n    number: 8080\nmirrorPercentage:\n  value: 10","loc":"testdata/acme/11-vs-api.yaml:98","findings":[]},"dest:api.prod.svc.cluster.local:8080:v1":{"title":"api.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"],["subset","v1"],["subset labels","version=v1"]],"loc":"testdata/acme/01-services.yaml:41","findings":[]},"rule:prod/api-routes#5":{"uriVals":["/v1"],"uriRegexes":[],"title":"rule #6 of prod/api-routes (api-v1-gone)","kind":"rule","rows":[["evaluation order","#6 (first match wins)"],["match","URI prefix /v1"],["⤳ redirect","redirect → (same host)/v2 (HTTP 302)"]],"yaml":"name: api-v1-gone\nmatch:\n- uri:\n    prefix: /v1\nredirect:\n  uri: /v2\n  redirectCode: 302","loc":"testdata/acme/11-vs-api.yaml:118","findings":[]},"rule:prod/api-routes#5/redirect":{"title":"HTTP 302 → /v2","kind":"dest","rows":[["type","redirect"]],"loc":"testdata/acme/11-vs-api.yaml:118","findings":[]},"rule:prod/grpc-routes#0":{"uriVals":["/acme.orders.v1.Orders/"],"uriRegexes":[],"title":"rule #1 of prod/grpc-routes (orders-rpc)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","URI prefix /acme.orders.v1.Orders/"],["⏱ timeout","request timeout 10s"],["↻ retries","retries: 2 attempts (on cancelled,deadline-exceeded,unavailable)"]],"yaml":"name: orders-rpc\nmatch:\n- uri:\n    prefix: /acme.orders.v1.Orders/\ntimeout: 10s\nretries:\n  attempts: 2\n  retryOn: cancelled,deadline-exceeded,unavailable\nroute:\n- destination:\n    host: api\n    port:\n      number: 9090","loc":"testdata/acme/12-vs-grpc.yaml:16","findings":[]},"dest:api.prod.svc.cluster.local:9090:-":{"title":"api.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","9090"]],"loc":"testdata/acme/01-services.yaml:41","findings":[]},"rule:prod/grpc-routes#1":{"uriVals":[],"uriRegexes":[],"title":"rule #2 of prod/grpc-routes (grpc-default)","kind":"rule","rows":[["evaluation order","#2 (first match wins)"],["match","(catch-all)"]],"yaml":"name: grpc-default\nroute:\n- destination:\n    host: api\n    port:\n      number: 9090","loc":"testdata/acme/12-vs-grpc.yaml:29","findings":[]},"rule:prod/stream-routes#0":{"uriVals":[],"uriRegexes":[],"title":"rule #1 of prod/stream-routes (stream-default)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","(catch-all)"]],"yaml":"name: stream-default\nroute:\n- destination:\n    host: stream\n    port:\n      number: 9090","loc":"testdata/acme/12-vs-grpc.yaml:47","findings":[]},"dest:stream.prod.svc.cluster.local:9090:-":{"title":"stream.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","9090"]],"loc":"testdata/acme/01-services.yaml:130","findings":[]},"rule:internal/orders-mesh#0":{"uriVals":[],"uriRegexes":[],"title":"rule #1 of internal/orders-mesh (orders-experiment)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","header x-experiment exact orders-v2"]],"yaml":"name: orders-experiment\nmatch:\n- headers:\n    x-experiment:\n      exact: orders-v2\nroute:\n- destination:\n    host: orders\n    subset: v2\n    port:\n      number: 8080","loc":"testdata/acme/20-mesh.yaml:20","findings":[]},"dest:orders.internal.svc.cluster.local:8080:v2":{"title":"orders.internal.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"],["subset","v2"],["subset labels","version=v2"]],"loc":"testdata/acme/01-services.yaml:165","findings":[]},"rule:internal/orders-mesh#1":{"uriVals":[],"uriRegexes":[],"title":"rule #2 of internal/orders-mesh (orders-default)","kind":"rule","rows":[["evaluation order","#2 (first match wins)"],["match","(catch-all)"],["⚡ fault","fault injection: abort 500 @ 0.1%"]],"yaml":"name: orders-default\nfault:\n  abort:\n    httpStatus: 500\n    percentage:\n      value: 0.1\nroute:\n- destination:\n    host: orders\n    subset: v1\n    port:\n      number: 8080","loc":"testdata/acme/20-mesh.yaml:33","findings":[]},"dest:orders.internal.svc.cluster.local:8080:v1":{"title":"orders.internal.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"],["subset","v1"],["subset labels","version=v1"]],"loc":"testdata/acme/01-services.yaml:165","findings":[]},"rule:internal/inventory-mesh#0":{"uriVals":["/read"],"uriRegexes":[],"title":"rule #1 of internal/inventory-mesh (inventory-read)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","URI prefix /read AND method GET|HEAD"],["⏱ timeout","request timeout 1s"]],"yaml":"name: inventory-read\nmatch:\n- uri:\n    prefix: /read\n  method:\n    regex: \"GET|HEAD\"\ntimeout: 1s\nroute:\n- destination:\n    host: inventory\n    port:\n      number: 8080","loc":"testdata/acme/20-mesh.yaml:56","findings":[]},"dest:inventory.internal.svc.cluster.local:8080:-":{"title":"inventory.internal.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"]],"loc":"testdata/acme/01-services.yaml:177","findings":[]},"rule:internal/inventory-mesh#1":{"uriVals":["/write"],"uriRegexes":[],"title":"rule #2 of internal/inventory-mesh (inventory-write)","kind":"rule","rows":[["evaluation order","#2 (first match wins)"],["match","URI prefix /write AND method POST"],["↻ retries","retries: 2 attempts (perTryTimeout 500ms)"]],"yaml":"name: inventory-write\nmatch:\n- uri:\n    prefix: /write\n  method:\n    exact: POST\nretries:\n  attempts: 2\n  perTryTimeout: 500ms\nroute:\n- destination:\n    host: inventory\n    port:\n      number: 8080","loc":"testdata/acme/20-mesh.yaml:68","findings":[]},"rule:internal/notifications-mesh#0":{"uriVals":[],"uriRegexes":[],"title":"rule #1 of internal/notifications-mesh (notify-default)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","(catch-all)"]],"yaml":"name: notify-default\nroute:\n- destination:\n    host: notifications\n    port:\n      number: 8080","loc":"testdata/acme/20-mesh.yaml:93","findings":[]},"dest:notifications.internal.svc.cluster.local:8080:-":{"title":"notifications.internal.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"]],"loc":"testdata/acme/01-services.yaml:188","findings":[]},"host:listener:istio-system/public-gateway#0/prod/apex-redirect":{"title":"acme.com","kind":"host","rows":[["VirtualService","prod/apex-redirect"],["effective hosts","acme.com"]],"loc":"testdata/acme/10-vs-web.yaml:16","findings":[]},"host:listener:istio-system/public-gateway#1/prod/apex-redirect":{"title":"acme.com","kind":"host","rows":[["VirtualService","prod/apex-redirect"],["effective hosts","acme.com"]],"loc":"testdata/acme/10-vs-web.yaml:16","findings":[]},"host:listener:istio-system/public-gateway#0/prod/storefront":{"title":"www.acme.com","kind":"host","rows":[["VirtualService","prod/storefront"],["effective hosts","www.acme.com"]],"loc":"testdata/acme/10-vs-web.yaml:39","findings":[]},"host:listener:istio-system/public-gateway#1/prod/storefront":{"title":"www.acme.com","kind":"host","rows":[["VirtualService","prod/storefront"],["effective hosts","www.acme.com"]],"loc":"testdata/acme/10-vs-web.yaml:39","findings":[]},"host:listener:istio-system/public-gateway#0/prod/tenant-sites":{"title":"*.tenants.acme.com","kind":"host","rows":[["VirtualService","prod/tenant-sites"],["effective hosts","*.tenants.acme.com"]],"loc":"testdata/acme/10-vs-web.yaml:211","findings":[]},"host:listener:istio-system/public-gateway#1/prod/tenant-sites":{"title":"*.tenants.acme.com","kind":"host","rows":[["VirtualService","prod/tenant-sites"],["effective hosts","*.tenants.acme.com"]],"loc":"testdata/acme/10-vs-web.yaml:211","findings":[]},"host:listener:istio-system/public-gateway#0/prod/internal-portal":{"title":"internal.acme.com","kind":"host","rows":[["VirtualService","prod/internal-portal"],["effective hosts","internal.acme.com"]],"loc":"testdata/acme/10-vs-web.yaml:245","findings":[]},"host:listener:istio-system/public-gateway#1/prod/internal-portal":{"title":"internal.acme.com","kind":"host","rows":[["VirtualService","prod/internal-portal"],["effective hosts","internal.acme.com"]],"loc":"testdata/acme/10-vs-web.yaml:245","findings":[]},"host:listener:istio-system/public-gateway#2/prod/internal-portal":{"title":"internal.acme.com","kind":"host","rows":[["VirtualService","prod/internal-portal"],["effective hosts","internal.acme.com"]],"loc":"testdata/acme/10-vs-web.yaml:245","findings":[]},"host:listener:istio-system/api-gateway#0/prod/api-routes":{"title":"api.acme.com","kind":"host","rows":[["VirtualService","prod/api-routes"],["effective hosts","api.acme.com"]],"loc":"testdata/acme/11-vs-api.yaml:9","findings":[{"id":"I001","severity":"info","message":"prod/api-routes: no catch-all rule — unmatched requests will get 404","loc":"testdata/acme/11-vs-api.yaml:9"}]},"host:listener:istio-system/grpc-gateway#0/prod/grpc-routes":{"title":"grpc.acme.com","kind":"host","rows":[["VirtualService","prod/grpc-routes"],["effective hosts","grpc.acme.com"]],"loc":"testdata/acme/12-vs-grpc.yaml:5","findings":[]},"host:listener:istio-system/grpc-gateway#1/prod/stream-routes":{"title":"stream.acme.com","kind":"host","rows":[["VirtualService","prod/stream-routes"],["effective hosts","stream.acme.com"]],"loc":"testdata/acme/12-vs-grpc.yaml:36","findings":[]},"host:mesh/internal/orders-mesh":{"title":"orders","kind":"host","rows":[["VirtualService","internal/orders-mesh"],["effective hosts","orders"]],"loc":"testdata/acme/20-mesh.yaml:8","findings":[]},"host:mesh/internal/inventory-mesh":{"title":"inventory","kind":"host","rows":[["VirtualService","internal/inventory-mesh"],["effective hosts","inventory"]],"loc":"testdata/acme/20-mesh.yaml:47","findings":[{"id":"I001","severity":"info","message":"mesh routing internal/inventory-mesh: no catch-all rule — unmatched requests fall through to default service routing","loc":"testdata/acme/20-mesh.yaml:47"}]},"host:mesh/internal/notifications-mesh":{"title":"notifications","kind":"host","rows":[["VirtualService","internal/notifications-mesh"],["effective hosts","notifications"]],"loc":"testdata/acme/20-mesh.yaml:84","findings":[]},"pm:*.tenants.acme.com#0":{"uriVals":[],"uriRegexes":[],"title":"rule #2 of prod/tenant-sites (tenant-default)","kind":"rule","rows":[["evaluation order","#2 (first match wins)"],["match","(catch-all)"]],"yaml":"name: tenant-default\nroute:\n- destination:\n    host: web\n    subset: stable\n    port:\n      number: 80","loc":"testdata/acme/10-vs-web.yaml:234","findings":[]},"pm:*.tenants.acme.com#1":{"uriVals":["/app"],"uriRegexes":[],"title":"rule #1 of prod/tenant-sites (tenant-home)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","URI prefix /app AND authority regex [a-z0-9-]+\\.tenants\\.acme\\.com"]],"yaml":"name: tenant-home\nmatch:\n- uri:\n    prefix: /app\n  authority:\n    regex: \"[a-z0-9-]+\\\\.tenants\\\\.acme\\\\.com\"\nroute:\n- destination:\n    host: web\n    subset: stable\n    port:\n      number: 80","loc":"testdata/acme/10-vs-web.yaml:222","findings":[]},"pd:*.tenants.acme.com:web.prod:80(stable)":{"title":"web.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","80"],["subset","stable"],["subset labels","track=stable"]],"loc":"testdata/acme/01-services.yaml:7","findings":[]},"pm:acme.com#0":{"uriVals":["/"],"uriRegexes":[],"title":"rule #1 of prod/apex-redirect (apex-to-www)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","URI prefix /"],["⤳ redirect","redirect → https://www.acme.com/ (HTTP 301)"]],"yaml":"name: apex-to-www\nmatch:\n- uri:\n    prefix: /\nredirect:\n  uri: /\n  authority: www.acme.com\n  scheme: https\n  redirectCode: 301","loc":"testdata/acme/10-vs-web.yaml:29","findings":[]},"pd:acme.com:redirect:301:https://www.acme.com/":{"title":"HTTP 301 → https://www.acme.com/","kind":"dest","rows":[["type","redirect"]],"loc":"testdata/acme/10-vs-web.yaml:29","findings":[]},"pm:api.acme.com#0":{"uriVals":["/v1"],"uriRegexes":[],"title":"rule #6 of prod/api-routes (api-v1-gone)","kind":"rule","rows":[["evaluation order","#6 (first match wins)"],["match","URI prefix /v1"],["⤳ redirect","redirect → (same host)/v2 (HTTP 302)"]],"yaml":"name: api-v1-gone\nmatch:\n- uri:\n    prefix: /v1\nredirect:\n  uri: /v2\n  redirectCode: 302","loc":"testdata/acme/11-vs-api.yaml:118","findings":[]},"pm:api.acme.com#1":{"uriVals":["/v2"],"uriRegexes":[],"title":"rule #5 of prod/api-routes (api-v2)","kind":"rule","rows":[["evaluation order","#5 (first match wins)"],["match","URI prefix /v2"],["✂ rewrite","rewrite: uri → /"],["🪞 mirror","mirrors traffic to api-shadow"]],"yaml":"name: api-v2\nmatch:\n- uri:\n    prefix: /v2\nrewrite:\n  uri: /\nroute:\n- destination:\n    host: api\n    subset: v1\n    port:\n      number: 8080\nmirror:\n  host: api-shadow\n  port:\n    number: 8080\nmirrorPercentage:\n  value: 10","loc":"testdata/acme/11-vs-api.yaml:98","findings":[]},"pm:api.acme.com#2":{"uriVals":["/v2"],"uriRegexes":[],"title":"rule #1 of prod/api-routes (api-v2-canary)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","URI prefix /v2 AND method POST AND header x-canary exact true"],["⏱ timeout","request timeout 5s"],["↻ retries","retries: 3 attempts (perTryTimeout 1s, on 5xx,reset)"],["🪞 mirror","mirrors traffic to api-shadow"]],"yaml":"name: api-v2-canary\nmatch:\n- uri:\n    prefix: /v2\n  headers:\n    x-canary:\n      exact: \"true\"\n  method:\n    exact: POST\ntimeout: 5s\nretries:\n  attempts: 3\n  perTryTimeout: 1s\n  retryOn: 5xx,reset\nroute:\n- destination:\n    host: api\n    subset: v2\n    port:\n      number: 8080\n  weight: 80\n- destination:\n    host: api\n    subset: v3\n    port:\n      number: 8080\n  weight: 20\nmirror:\n  host: api-shadow\n  port:\n    number: 8080","loc":"testdata/acme/11-vs-api.yaml:21","findings":[]},"pm:api.acme.com#3":{"uriVals":["/v2/cart"],"uriRegexes":[],"title":"rule #2 of prod/api-routes (cart)","kind":"rule","rows":[["evaluation order","#2 (first match wins)"],["match","URI prefix /v2/cart AND scheme exact https AND header authorization present"]],"yaml":"name: cart\nmatch:\n- uri:\n    prefix: /v2/cart\n  scheme:\n    exact: https\n  headers:\n    authorization: {}\nroute:\n- destination:\n    host: cart\n    port:\n      number: 8080","loc":"testdata/acme/11-vs-api.yaml:55","findings":[]},"pm:api.acme.com#4":{"uriVals":["/v2/catalog"],"uriRegexes":[],"title":"rule #3 of prod/api-routes (catalog)","kind":"rule","rows":[["evaluation order","#3 (first match wins)"],["match","URI prefix /v2/catalog AND ?category regex .+"]],"yaml":"name: catalog\nmatch:\n- uri:\n    prefix: /v2/catalog\n  queryParams:\n    category:\n      regex: \".+\"\nroute:\n- destination:\n    host: catalog\n    port:\n      number: 8080","loc":"testdata/acme/11-vs-api.yaml:70","findings":[]},"pm:api.acme.com#5":{"uriVals":["/v2/payments"],"uriRegexes":[],"title":"rule #4 of prod/api-routes (payments)","kind":"rule","rows":[["evaluation order","#4 (first match wins)"],["match","URI prefix /v2/payments AND port 443"]],"yaml":"name: payments\nmatch:\n- uri:\n    prefix: /v2/payments\n  port: 443\nroute:\n- destination:\n    host: payments.payments.svc.cluster.local\n    subset: v2\n    port:\n      number: 8080","loc":"testdata/acme/11-vs-api.yaml:84","findings":[]},"pd:api.acme.com:redirect:302:/v2":{"title":"HTTP 302 → /v2","kind":"dest","rows":[["type","redirect"]],"loc":"testdata/acme/11-vs-api.yaml:118","findings":[]},"pd:api.acme.com:api.prod:8080(v1)":{"title":"api.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"],["subset","v1"],["subset labels","version=v1"]],"loc":"testdata/acme/01-services.yaml:41","findings":[]},"pd:api.acme.com:api.prod:8080(v2)":{"title":"api.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"],["subset","v2"],["subset labels","version=v2"]],"loc":"testdata/acme/01-services.yaml:41","findings":[]},"pd:api.acme.com:api.prod:8080(v3)":{"title":"api.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"],["subset","v3"],["subset labels","version=v3"]],"loc":"testdata/acme/01-services.yaml:41","findings":[]},"pd:api.acme.com:cart.prod:8080":{"title":"cart.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"]],"loc":"testdata/acme/01-services.yaml:64","findings":[]},"pd:api.acme.com:catalog.prod:8080":{"title":"catalog.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"]],"loc":"testdata/acme/01-services.yaml:75","findings":[]},"pd:api.acme.com:payments.payments:8080(v2)":{"title":"payments.payments.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"],["subset","v2"],["subset labels","version=v2"]],"loc":"testdata/acme/01-services.yaml:142","findings":[]},"pm:grpc.acme.com#0":{"uriVals":[],"uriRegexes":[],"title":"rule #2 of prod/grpc-routes (grpc-default)","kind":"rule","rows":[["evaluation order","#2 (first match wins)"],["match","(catch-all)"]],"yaml":"name: grpc-default\nroute:\n- destination:\n    host: api\n    port:\n      number: 9090","loc":"testdata/acme/12-vs-grpc.yaml:29","findings":[]},"pm:grpc.acme.com#1":{"uriVals":["/acme.orders.v1.Orders/"],"uriRegexes":[],"title":"rule #1 of prod/grpc-routes (orders-rpc)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","URI prefix /acme.orders.v1.Orders/"],["⏱ timeout","request timeout 10s"],["↻ retries","retries: 2 attempts (on cancelled,deadline-exceeded,unavailable)"]],"yaml":"name: orders-rpc\nmatch:\n- uri:\n    prefix: /acme.orders.v1.Orders/\ntimeout: 10s\nretries:\n  attempts: 2\n  retryOn: cancelled,deadline-exceeded,unavailable\nroute:\n- destination:\n    host: api\n    port:\n      number: 9090","loc":"testdata/acme/12-vs-grpc.yaml:16","findings":[]},"pd:grpc.acme.com:api.prod:9090":{"title":"api.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","9090"]],"loc":"testdata/acme/01-services.yaml:41","findings":[]},"pm:internal.acme.com#0":{"uriVals":[],"uriRegexes":[],"title":"rule #2 of prod/internal-portal (portal-default)","kind":"rule","rows":[["evaluation order","#2 (first match wins)"],["match","(catch-all)"]],"yaml":"name: portal-default\nroute:\n- destination:\n    host: internal-portal\n    port:\n      number: 8080","loc":"testdata/acme/10-vs-web.yaml:267","findings":[]},"pm:internal.acme.com#1":{"uriVals":["/"],"uriRegexes":[],"title":"rule #1 of prod/internal-portal (portal)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","URI prefix / AND sourceLabels team=platform"]],"yaml":"name: portal\nmatch:\n- uri:\n    prefix: /\n  sourceLabels:\n    team: platform\nroute:\n- destination:\n    host: internal-portal\n    port:\n      number: 8080","loc":"testdata/acme/10-vs-web.yaml:256","findings":[]},"pd:internal.acme.com:internal-portal.prod:8080":{"title":"internal-portal.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"]],"loc":"testdata/acme/01-services.yaml:119","findings":[]},"pm:inventory#0":{"uriVals":["/read"],"uriRegexes":[],"title":"rule #1 of internal/inventory-mesh (inventory-read)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","URI prefix /read AND method GET|HEAD"],["⏱ timeout","request timeout 1s"]],"yaml":"name: inventory-read\nmatch:\n- uri:\n    prefix: /read\n  method:\n    regex: \"GET|HEAD\"\ntimeout: 1s\nroute:\n- destination:\n    host: inventory\n    port:\n      number: 8080","loc":"testdata/acme/20-mesh.yaml:56","findings":[]},"pm:inventory#1":{"uriVals":["/write"],"uriRegexes":[],"title":"rule #2 of internal/inventory-mesh (inventory-write)","kind":"rule","rows":[["evaluation order","#2 (first match wins)"],["match","URI prefix /write AND method POST"],["↻ retries","retries: 2 attempts (perTryTimeout 500ms)"]],"yaml":"name: inventory-write\nmatch:\n- uri:\n    prefix: /write\n  method:\n    exact: POST\nretries:\n  attempts: 2\n  perTryTimeout: 500ms\nroute:\n- destination:\n    host: inventory\n    port:\n      number: 8080","loc":"testdata/acme/20-mesh.yaml:68","findings":[]},"pd:inventory:inventory.internal:8080":{"title":"inventory.internal.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"]],"loc":"testdata/acme/01-services.yaml:177","findings":[]},"pm:notifications#0":{"uriVals":[],"uriRegexes":[],"title":"rule #1 of internal/notifications-mesh (notify-default)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","(catch-all)"]],"yaml":"name: notify-default\nroute:\n- destination:\n    host: notifications\n    port:\n      number: 8080","loc":"testdata/acme/20-mesh.yaml:93","findings":[]},"pd:notifications:notifications.internal:8080":{"title":"notifications.internal.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"]],"loc":"testdata/acme/01-services.yaml:188","findings":[]},"pm:orders#0":{"uriVals":[],"uriRegexes":[],"title":"rule #2 of internal/orders-mesh (orders-default)","kind":"rule","rows":[["evaluation order","#2 (first match wins)"],["match","(catch-all)"],["⚡ fault","fault injection: abort 500 @ 0.1%"]],"yaml":"name: orders-default\nfault:\n  abort:\n    httpStatus: 500\n    percentage:\n      value: 0.1\nroute:\n- destination:\n    host: orders\n    subset: v1\n    port:\n      number: 8080","loc":"testdata/acme/20-mesh.yaml:33","findings":[]},"pm:orders#1":{"uriVals":[],"uriRegexes":[],"title":"rule #1 of internal/orders-mesh (orders-experiment)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","header x-experiment exact orders-v2"]],"yaml":"name: orders-experiment\nmatch:\n- headers:\n    x-experiment:\n      exact: orders-v2\nroute:\n- destination:\n    host: orders\n    subset: v2\n    port:\n      number: 8080","loc":"testdata/acme/20-mesh.yaml:20","findings":[]},"pd:orders:orders.internal:8080(v1)":{"title":"orders.internal.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"],["subset","v1"],["subset labels","version=v1"]],"loc":"testdata/acme/01-services.yaml:165","findings":[]},"pd:orders:orders.internal:8080(v2)":{"title":"orders.internal.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"],["subset","v2"],["subset labels","version=v2"]],"loc":"testdata/acme/01-services.yaml:165","findings":[]},"pm:stream.acme.com#0":{"uriVals":[],"uriRegexes":[],"title":"rule #1 of prod/stream-routes (stream-default)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","(catch-all)"]],"yaml":"name: stream-default\nroute:\n- destination:\n    host: stream\n    port:\n      number: 9090","loc":"testdata/acme/12-vs-grpc.yaml:47","findings":[]},"pd:stream.acme.com:stream.prod:9090":{"title":"stream.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","9090"]],"loc":"testdata/acme/01-services.yaml:130","findings":[]},"pm:www.acme.com#0":{"uriVals":[],"uriRegexes":[],"title":"rule #6 of prod/storefront (beta-experience)","kind":"rule","rows":[["evaluation order","#6 (first match wins)"],["match","header x-acme-channel regex beta|canary AND header x-opt-out absent  OR  header cookie prefix acme_beta="],["⚡ fault","fault injection: delay 5s @ 1%; abort 503 @ 0.5%"],["◌ cors","CORS policy attached"]],"yaml":"name: beta-experience\nmatch:\n- headers:\n    x-acme-channel:\n      regex: \"beta|canary\"\n  withoutHeaders:\n    x-opt-out: {}\n- headers:\n    cookie:\n      prefix: \"acme_beta=\"\ncorsPolicy:\n  allowOrigins:\n  - exact: https://www.acme.com\n  allowMethods: [GET, POST, OPTIONS]\n  allowHeaders: [authorization, content-type]\n  maxAge: 24h\nfault:\n  delay:\n    fixedDelay: 5s\n    percentage:\n      value: 1\n  abort:\n    httpStatus: 503\n    percentage:\n      value: 0.5\nroute:\n- destination:\n    host: web\n    subset: canary\n    port:\n      number: 80","loc":"testdata/acme/10-vs-web.yaml:139","findings":[]},"pm:www.acme.com#1":{"uriVals":[],"uriRegexes":[],"title":"rule #6 of prod/storefront (beta-experience)","kind":"rule","rows":[["evaluation order","#6 (first match wins)"],["match","header x-acme-channel regex beta|canary AND header x-opt-out absent  OR  header cookie prefix acme_beta="],["⚡ fault","fault injection: delay 5s @ 1%; abort 503 @ 0.5%"],["◌ cors","CORS policy attached"]],"yaml":"name: beta-experience\nmatch:\n- headers:\n    x-acme-channel:\n      regex: \"beta|canary\"\n  withoutHeaders:\n    x-opt-out: {}\n- headers:\n    cookie:\n      prefix: \"acme_beta=\"\ncorsPolicy:\n  allowOrigins:\n  - exact: https://www.acme.com\n  allowMethods: [GET, POST, OPTIONS]\n  allowHeaders: [authorization, content-type]\n  maxAge: 24h\nfault:\n  delay:\n    fixedDelay: 5s\n    percentage:\n      value: 1\n  abort:\n    httpStatus: 503\n    percentage:\n      value: 0.5\nroute:\n- destination:\n    host: web\n    subset: canary\n    port:\n      number: 80","loc":"testdata/acme/10-vs-web.yaml:139","findings":[]},"pm:www.acme.com#2":{"uriVals":["/"],"uriRegexes":[],"title":"rule #8 of prod/storefront (fallback)","kind":"rule","rows":[["evaluation order","#8 (first match wins)"],["match","URI prefix /"]],"yaml":"name: fallback\nmatch:\n- uri:\n    prefix: /\nroute:\n- destination:\n    host: web\n    subset: stable\n    port:\n      number: 80","loc":"testdata/acme/10-vs-web.yaml:197","findings":[]},"pm:www.acme.com#3":{"uriVals":["/account"],"uriRegexes":[],"title":"rule #7 of prod/storefront (account)","kind":"rule","rows":[["evaluation order","#7 (first match wins)"],["match","URI prefix /account AND method GET|HEAD"],["✂ rewrite","rewrite: uri regex ^/account(/.*)?$ → /u\\1"],["≡ headers","request/response header manipulation"]],"yaml":"name: account\nmatch:\n- uri:\n    prefix: /account\n  method:\n    regex: \"GET|HEAD\"\nrewrite:\n  uriRegexRewrite:\n    match: \"^/account(/.*)?$\"\n    rewrite: \"/u\\\\1\"\nheaders:\n  request:\n    add:\n      x-acme-edge: \"public-gateway\"\n    remove:\n    - x-internal-debug\nroute:\n- destination:\n    host: web\n    subset: stable\n    port:\n      number: 80","loc":"testdata/acme/10-vs-web.yaml:173","findings":[]},"pm:www.acme.com#4":{"uriVals":["/assets"],"uriRegexes":[],"title":"rule #3 of prod/storefront (assets)","kind":"rule","rows":[["evaluation order","#3 (first match wins)"],["match","URI prefix /assets"],["✂ rewrite","rewrite: uri → /"],["⏱ timeout","request timeout 3s"],["≡ headers","request/response header manipulation"]],"yaml":"name: assets\nmatch:\n- uri:\n    prefix: /assets\nrewrite:\n  uri: /\ntimeout: 3s\nheaders:\n  response:\n    set:\n      cache-control: \"public, max-age=31536000\"\nroute:\n- destination:\n    host: static-assets\n    port:\n      number: 80","loc":"testdata/acme/10-vs-web.yaml:71","findings":[]},"pm:www.acme.com#5":{"uriVals":["/healthz"],"uriRegexes":[],"title":"rule #1 of prod/storefront (healthz)","kind":"rule","rows":[["evaluation order","#1 (first match wins)"],["match","URI exact /healthz"],["▣ directResponse","direct response with status 200"]],"yaml":"name: healthz\nmatch:\n- uri:\n    exact: /healthz\ndirectResponse:\n  status: 200\n  body:\n    string: \"ok\"","loc":"testdata/acme/10-vs-web.yaml:51","findings":[]},"pm:www.acme.com#6":{"uriVals":["/home"],"uriRegexes":[],"title":"rule #2 of prod/storefront (legacy-home)","kind":"rule","rows":[["evaluation order","#2 (first match wins)"],["match","URI exact /home"],["⤳ redirect","redirect → (same host)/ (HTTP 301)"]],"yaml":"name: legacy-home\nmatch:\n- uri:\n    exact: /home\nredirect:\n  uri: /\n  redirectCode: 301","loc":"testdata/acme/10-vs-web.yaml:61","findings":[]},"pm:www.acme.com#7":{"uriVals":["/shop"],"uriRegexes":[],"title":"rule #4 of prod/storefront (web-canary-split)","kind":"rule","rows":[["evaluation order","#4 (first match wins)"],["match","URI prefix /shop"],["↻ retries","retries: 3 attempts (perTryTimeout 2s, on 5xx,gateway-error,connect-failure)"]],"yaml":"name: web-canary-split\nmatch:\n- uri:\n    prefix: /shop\nretries:\n  attempts: 3\n  perTryTimeout: 2s\n  retryOn: 5xx,gateway-error,connect-failure\nroute:\n- destination:\n    host: web\n    subset: stable\n    port:\n      number: 80\n  weight: 90\n- destination:\n    host: web\n    subset: canary\n    port:\n      number: 80\n  weight: 10","loc":"testdata/acme/10-vs-web.yaml:89","findings":[]},"pm:www.acme.com#8":{"uriVals":[],"uriRegexes":["/search/[a-z0-9-]+"],"title":"rule #5 of prod/storefront (search)","kind":"rule","rows":[["evaluation order","#5 (first match wins)"],["match","URI regex /search/[a-z0-9-]+ (case-insensitive) AND ?q regex .+ AND ?page=1 AND ?debug present"],["🪞 mirror","mirrors traffic to recommendations"]],"yaml":"name: search\nmatch:\n- uri:\n    regex: \"/search/[a-z0-9-]+\"\n  queryParams:\n    q:\n      regex: \".+\"\n    page:\n      exact: \"1\"\n    debug: {}\n  ignoreUriCase: true\nroute:\n- destination:\n    host: search\n    port:\n      number: 8080\nmirror:\n  host: recommendations\n  port:\n    number: 8080\nmirrorPercentage:\n  value: 25","loc":"testdata/acme/10-vs-web.yaml:113","findings":[]},"pd:www.acme.com:web.prod:80(canary)":{"title":"web.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","80"],["subset","canary"],["subset labels","track=canary"]],"loc":"testdata/acme/01-services.yaml:7","findings":[]},"pd:www.acme.com:web.prod:80(stable)":{"title":"web.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","80"],["subset","stable"],["subset labels","track=stable"]],"loc":"testdata/acme/01-services.yaml:7","findings":[]},"pd:www.acme.com:static-assets.prod:80":{"title":"static-assets.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","80"]],"loc":"testdata/acme/01-services.yaml:29","findings":[]},"pd:www.acme.com:direct:200":{"title":"direct response 200","kind":"dest","rows":[["type","direct"]],"loc":"testdata/acme/10-vs-web.yaml:51","findings":[]},"pd:www.acme.com:redirect:301:/":{"title":"HTTP 301 → /","kind":"dest","rows":[["type","redirect"]],"loc":"testdata/acme/10-vs-web.yaml:61","findings":[]},"pd:www.acme.com:search.prod:8080":{"title":"search.prod.svc.cluster.local","kind":"dest","rows":[["type","service"],["port","8080"]],"loc":"testdata/acme/01-services.yaml:86","findings":[]}},"edges":[["rule:prod/apex-redirect#0","rule:prod/apex-redirect#0/redirect","routes"],["rule:prod/storefront#0","rule:prod/storefront#0/direct","routes"],["rule:prod/storefront#1","rule:prod/storefront#1/redirect","routes"],["rule:prod/storefront#2","dest:static-assets.prod.svc.cluster.local:80:-","routes"],["rule:prod/storefront#3","dest:web.prod.svc.cluster.local:80:stable","routes"],["rule:prod/storefront#3","dest:web.prod.svc.cluster.local:80:canary","routes"],["rule:prod/storefront#4","dest:search.prod.svc.cluster.local:8080:-","routes"],["rule:prod/storefront#4","dest:recommendations.prod.svc.cluster.local:8080:-","mirrors"],["rule:prod/storefront#5","dest:web.prod.svc.cluster.local:80:canary","routes"],["rule:prod/storefront#6","dest:web.prod.svc.cluster.local:80:stable","routes"],["rule:prod/storefront#7","dest:web.prod.svc.cluster.local:80:stable","routes"],["rule:prod/tenant-sites#0","dest:web.prod.svc.cluster.local:80:stable","routes"],["rule:prod/tenant-sites#1","dest:web.prod.svc.cluster.local:80:stable","routes"],["rule:prod/internal-portal#0","dest:internal-portal.prod.svc.cluster.local:8080:-","routes"],["rule:prod/internal-portal#1","dest:internal-portal.prod.svc.cluster.local:8080:-","routes"],["rule:prod/api-routes#0","dest:api.prod.svc.cluster.local:8080:v2","routes"],["rule:prod/api-routes#0","dest:api.prod.svc.cluster.local:8080:v3","routes"],["rule:prod/api-routes#0","dest:api-shadow.prod.svc.cluster.local:8080:-","mirrors"],["rule:prod/api-routes#1","dest:cart.prod.svc.cluster.local:8080:-","routes"],["rule:prod/api-routes#2","dest:catalog.prod.svc.cluster.local:8080:-","routes"],["rule:prod/api-routes#3","dest:payments.payments.svc.cluster.local:8080:v2","routes"],["rule:prod/api-routes#4","dest:api.prod.svc.cluster.local:8080:v1","routes"],["rule:prod/api-routes#4","dest:api-shadow.prod.svc.cluster.local:8080:-","mirrors"],["rule:prod/api-routes#5","rule:prod/api-routes#5/redirect","routes"],["rule:prod/grpc-routes#0","dest:api.prod.svc.cluster.local:9090:-","routes"],["rule:prod/grpc-routes#1","dest:api.prod.svc.cluster.local:9090:-","routes"],["rule:prod/stream-routes#0","dest:stream.prod.svc.cluster.local:9090:-","routes"],["rule:internal/orders-mesh#0","dest:orders.internal.svc.cluster.local:8080:v2","routes"],["rule:internal/orders-mesh#1","dest:orders.internal.svc.cluster.local:8080:v1","routes"],["rule:internal/inventory-mesh#0","dest:inventory.internal.svc.cluster.local:8080:-","routes"],["rule:internal/inventory-mesh#1","dest:inventory.internal.svc.cluster.local:8080:-","routes"],["rule:internal/notifications-mesh#0","dest:notifications.internal.svc.cluster.local:8080:-","routes"],["listener:istio-system/public-gateway#0","host:listener:istio-system/public-gateway#0/prod/apex-redirect","accepts"],["host:listener:istio-system/public-gateway#0/prod/apex-redirect","rule:prod/apex-redirect#0","evaluates"],["listener:istio-system/public-gateway#1","host:listener:istio-system/public-gateway#1/prod/apex-redirect","accepts"],["host:listener:istio-system/public-gateway#1/prod/apex-redirect","rule:prod/apex-redirect#0","evaluates"],["listener:istio-system/public-gateway#0","host:listener:istio-system/public-gateway#0/prod/storefront","accepts"],["host:listener:istio-system/public-gateway#0/prod/storefront","rule:prod/storefront#0","evaluates"],["host:listener:istio-system/public-gateway#0/prod/storefront","rule:prod/storefront#1","evaluates"],["host:listener:istio-system/public-gateway#0/prod/storefront","rule:prod/storefront#2","evaluates"],["host:listener:istio-system/public-gateway#0/prod/storefront","rule:prod/storefront#3","evaluates"],["host:listener:istio-system/public-gateway#0/prod/storefront","rule:prod/storefront#4","evaluates"],["host:listener:istio-system/public-gateway#0/prod/storefront","rule:prod/storefront#5","evaluates"],["host:listener:istio-system/public-gateway#0/prod/storefront","rule:prod/storefront#6","evaluates"],["host:listener:istio-system/public-gateway#0/prod/storefront","rule:prod/storefront#7","evaluates"],["listener:istio-system/public-gateway#1","host:listener:istio-system/public-gateway#1/prod/storefront","accepts"],["host:listener:istio-system/public-gateway#1/prod/storefront","rule:prod/storefront#0","evaluates"],["host:listener:istio-system/public-gateway#1/prod/storefront","rule:prod/storefront#1","evaluates"],["host:listener:istio-system/public-gateway#1/prod/storefront","rule:prod/storefront#2","evaluates"],["host:listener:istio-system/public-gateway#1/prod/storefront","rule:prod/storefront#3","evaluates"],["host:listener:istio-system/public-gateway#1/prod/storefront","rule:prod/storefront#4","evaluates"],["host:listener:istio-system/public-gateway#1/prod/storefront","rule:prod/storefront#5","evaluates"],["host:listener:istio-system/public-gateway#1/prod/storefront","rule:prod/storefront#6","evaluates"],["host:listener:istio-system/public-gateway#1/prod/storefront","rule:prod/storefront#7","evaluates"],["listener:istio-system/public-gateway#0","host:listener:istio-system/public-gateway#0/prod/tenant-sites","accepts"],["host:listener:istio-system/public-gateway#0/prod/tenant-sites","rule:prod/tenant-sites#0","evaluates"],["host:listener:istio-system/public-gateway#0/prod/tenant-sites","rule:prod/tenant-sites#1","evaluates"],["listener:istio-system/public-gateway#1","host:listener:istio-system/public-gateway#1/prod/tenant-sites","accepts"],["host:listener:istio-system/public-gateway#1/prod/tenant-sites","rule:prod/tenant-sites#0","evaluates"],["host:listener:istio-system/public-gateway#1/prod/tenant-sites","rule:prod/tenant-sites#1","evaluates"],["listener:istio-system/public-gateway#0","host:listener:istio-system/public-gateway#0/prod/internal-portal","accepts"],["host:listener:istio-system/public-gateway#0/prod/internal-portal","rule:prod/internal-portal#0","evaluates"],["host:listener:istio-system/public-gateway#0/prod/internal-portal","rule:prod/internal-portal#1","evaluates"],["listener:istio-system/public-gateway#1","host:listener:istio-system/public-gateway#1/prod/internal-portal","accepts"],["host:listener:istio-system/public-gateway#1/prod/internal-portal","rule:prod/internal-portal#0","evaluates"],["host:listener:istio-system/public-gateway#1/prod/internal-portal","rule:prod/internal-portal#1","evaluates"],["listener:istio-system/public-gateway#2","host:listener:istio-system/public-gateway#2/prod/internal-portal","accepts"],["host:listener:istio-system/public-gateway#2/prod/internal-portal","rule:prod/internal-portal#0","evaluates"],["host:listener:istio-system/public-gateway#2/prod/internal-portal","rule:prod/internal-portal#1","evaluates"],["listener:istio-system/api-gateway#0","host:listener:istio-system/api-gateway#0/prod/api-routes","accepts"],["host:listener:istio-system/api-gateway#0/prod/api-routes","rule:prod/api-routes#0","evaluates"],["host:listener:istio-system/api-gateway#0/prod/api-routes","rule:prod/api-routes#1","evaluates"],["host:listener:istio-system/api-gateway#0/prod/api-routes","rule:prod/api-routes#2","evaluates"],["host:listener:istio-system/api-gateway#0/prod/api-routes","rule:prod/api-routes#3","evaluates"],["host:listener:istio-system/api-gateway#0/prod/api-routes","rule:prod/api-routes#4","evaluates"],["host:listener:istio-system/api-gateway#0/prod/api-routes","rule:prod/api-routes#5","evaluates"],["listener:istio-system/grpc-gateway#0","host:listener:istio-system/grpc-gateway#0/prod/grpc-routes","accepts"],["host:listener:istio-system/grpc-gateway#0/prod/grpc-routes","rule:prod/grpc-routes#0","evaluates"],["host:listener:istio-system/grpc-gateway#0/prod/grpc-routes","rule:prod/grpc-routes#1","evaluates"],["listener:istio-system/grpc-gateway#1","host:listener:istio-system/grpc-gateway#1/prod/stream-routes","accepts"],["host:listener:istio-system/grpc-gateway#1/prod/stream-routes","rule:prod/stream-routes#0","evaluates"],["host:mesh/internal/orders-mesh","rule:internal/orders-mesh#0","evaluates"],["host:mesh/internal/orders-mesh","rule:internal/orders-mesh#1","evaluates"],["host:mesh/internal/inventory-mesh","rule:internal/inventory-mesh#0","evaluates"],["host:mesh/internal/inventory-mesh","rule:internal/inventory-mesh#1","evaluates"],["host:mesh/internal/notifications-mesh","rule:internal/notifications-mesh#0","evaluates"]],"pathNodes":[{"id":"pm:*.tenants.acme.com#0","host":"*.tenants.acme.com","uri":"","rx":0,"dests":"web.prod:80(stable)"},{"id":"pm:*.tenants.acme.com#1","host":"*.tenants.acme.com","uri":"/app","rx":0,"dests":"web.prod:80(stable)"},{"id":"pm:acme.com#0","host":"acme.com","uri":"/","rx":0,"dests":"redirect:301:https://www.acme.com/"},{"id":"pm:api.acme.com#0","host":"api.acme.com","uri":"/v1","rx":0,"dests":"redirect:302:/v2"},{"id":"pm:api.acme.com#1","host":"api.acme.com","uri":"/v2","rx":0,"dests":"api.prod:8080(v1)"},{"id":"pm:api.acme.com#2","host":"api.acme.com","uri":"/v2","rx":0,"dests":"api.prod:8080(v2)=80% api.prod:8080(v3)=20%"},{"id":"pm:api.acme.com#3","host":"api.acme.com","uri":"/v2/cart","rx":0,"dests":"cart.prod:8080"},{"id":"pm:api.acme.com#4","host":"api.acme.com","uri":"/v2/catalog","rx":0,"dests":"catalog.prod:8080"},{"id":"pm:api.acme.com#5","host":"api.acme.com","uri":"/v2/payments","rx":0,"dests":"payments.payments:8080(v2)"},{"id":"pm:grpc.acme.com#0","host":"grpc.acme.com","uri":"","rx":0,"dests":"api.prod:9090"},{"id":"pm:grpc.acme.com#1","host":"grpc.acme.com","uri":"/acme.orders.v1.Orders/","rx":0,"dests":"api.prod:9090"},{"id":"pm:internal.acme.com#0","host":"internal.acme.com","uri":"","rx":0,"dests":"internal-portal.prod:8080"},{"id":"pm:internal.acme.com#1","host":"internal.acme.com","uri":"/","rx":0,"dests":"internal-portal.prod:8080"},{"id":"pm:inventory#0","host":"inventory","uri":"/read","rx":0,"dests":"inventory.internal:8080"},{"id":"pm:inventory#1","host":"inventory","uri":"/write","rx":0,"dests":"inventory.internal:8080"},{"id":"pm:notifications#0","host":"notifications","uri":"","rx":0,"dests":"notifications.internal:8080"},{"id":"pm:orders#0","host":"orders","uri":"","rx":0,"dests":"orders.internal:8080(v1)"},{"id":"pm:orders#1","host":"orders","uri":"","rx":0,"dests":"orders.internal:8080(v2)"},{"id":"pm:stream.acme.com#0","host":"stream.acme.com","uri":"","rx":0,"dests":"stream.prod:9090"},{"id":"pm:www.acme.com#0","host":"www.acme.com","uri":"","rx":0,"dests":"web.prod:80(canary)"},{"id":"pm:www.acme.com#1","host":"www.acme.com","uri":"","rx":0,"dests":"web.prod:80(canary)"},{"id":"pm:www.acme.com#2","host":"www.acme.com","uri":"/","rx":0,"dests":"web.prod:80(stable)"},{"id":"pm:www.acme.com#3","host":"www.acme.com","uri":"/account","rx":0,"dests":"web.prod:80(stable)"},{"id":"pm:www.acme.com#4","host":"www.acme.com","uri":"/assets","rx":0,"dests":"static-assets.prod:80"},{"id":"pm:www.acme.com#5","host":"www.acme.com","uri":"/healthz","rx":0,"dests":"direct:200"},{"id":"pm:www.acme.com#6","host":"www.acme.com","uri":"/home","rx":0,"dests":"redirect:301:/"},{"id":"pm:www.acme.com#7","host":"www.acme.com","uri":"/shop","rx":0,"dests":"web.prod:80(stable)=90% web.prod:80(canary)=10%"},{"id":"pm:www.acme.com#8","host":"www.acme.com","uri":"/search/[a-z0-9-]+","rx":1,"dests":"search.prod:8080"}]}</script>
+<script>
+(function () {
+  const data = JSON.parse(document.getElementById("model-data").textContent);
+  const panels = data.panels;
+
+  // adjacency over edges (both graph edges and visual client/listener links)
+  const fwd = new Map(), rev = new Map();
+  function addEdge(a, b) {
+    if (!fwd.has(a)) fwd.set(a, []);
+    if (!rev.has(b)) rev.set(b, []);
+    fwd.get(a).push(b); rev.get(b).push(a);
+  }
+  document.querySelectorAll("path.edge").forEach((p) => addEdge(p.dataset.from, p.dataset.to));
+
+  function reach(start, adj) {
+    const seen = new Set([start]); const q = [start];
+    while (q.length) {
+      const cur = q.shift();
+      for (const nxt of adj.get(cur) || []) if (!seen.has(nxt)) { seen.add(nxt); q.push(nxt); }
+    }
+    return seen;
+  }
+
+  const allNodes = document.querySelectorAll(".node");
+  const allEdges = document.querySelectorAll("path.edge, text.edge-label");
+
+  // mark nodes carrying findings (for warnings-only toggle)
+  const findingNodes = new Set();
+  document.querySelectorAll("#findings .finding").forEach((li) => {
+    (li.dataset.nodes || "").split(",").filter(Boolean).forEach((id) => findingNodes.add(id));
+  });
+  allNodes.forEach((n) => { if (findingNodes.has(n.dataset.id)) n.classList.add("has-finding"); });
+
+  // hover: highlight upstream + downstream within the whole document
+  allNodes.forEach((node) => {
+    node.addEventListener("mouseenter", () => {
+      const id = node.dataset.id;
+      const keep = new Set([...reach(id, fwd), ...reach(id, rev)]);
+      allNodes.forEach((n) => {
+        const inPath = keep.has(n.dataset.id);
+        n.classList.toggle("hl", inPath && n.dataset.id === id);
+        n.classList.toggle("fade", !inPath);
+      });
+      allEdges.forEach((e) => {
+        const from = e.dataset.from, to = e.dataset.to;
+        if (from === undefined) return;
+        e.classList.toggle("fade", !(keep.has(from) && keep.has(to)));
+      });
+    });
+    node.addEventListener("mouseleave", () => {
+      allNodes.forEach((n) => n.classList.remove("hl", "fade"));
+      allEdges.forEach((e) => e.classList.remove("fade"));
+    });
+    node.addEventListener("click", () => showPanel(node.dataset.id, node));
+  });
+
+  function showPanel(id, nodeEl) {
+    document.querySelectorAll(".node.selected").forEach((n) => n.classList.remove("selected"));
+    if (nodeEl) nodeEl.classList.add("selected");
+    const p = panels[id];
+    const el = document.getElementById("panel");
+    if (!p) { el.innerHTML = '<p class="empty">No details for this node.</p>'; return; }
+    let html = '<div class="ptitle">' + escapeHtml(p.title) + "</div>";
+    if (p.rows.length) {
+      html += "<table>" + p.rows.map((r) => "<tr><td>" + escapeHtml(r[0]) + "</td><td>" + escapeHtml(r[1]) + "</td></tr>").join("") + "</table>";
+    }
+    if (p.findings.length) {
+      html += p.findings.map((f) =>
+        '<li class="finding ' + f.severity + '"><span class="fid">' + f.id + "</span> " + escapeHtml(f.message) +
+        (f.loc ? '<span class="floc">' + escapeHtml(f.loc) + "</span>" : "") + "</li>").join("");
+    }
+    if (p.loc) html += '<div class="loc">source: ' + escapeHtml(p.loc) + "</div>";
+    if (p.yaml) html += "<pre>" + escapeHtml(p.yaml) + "</pre>";
+    el.innerHTML = html;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // findings list → highlight node
+  document.querySelectorAll("#findings .finding").forEach((li) => {
+    li.addEventListener("click", () => {
+      const ids = (li.dataset.nodes || "").split(",").filter(Boolean);
+      if (!ids.length) return;
+      const target = document.querySelector('.node[data-id="' + CSS.escape(ids[0]) + '"]');
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        showPanel(ids[0], target);
+      }
+    });
+  });
+
+  // filters
+  const fGw = document.getElementById("f-gw");
+  const fNs = document.getElementById("f-ns");
+  const fHost = document.getElementById("f-host");
+  const fUri = document.getElementById("f-uri");
+  const fSvc = document.getElementById("f-svc");
+  const fWarn = document.getElementById("f-warn");
+
+  // graph-edge index: rule id -> downstream destination panel titles (for the service filter)
+  const edgesFrom = new Map();
+  data.edges.forEach((e) => {
+    if (!edgesFrom.has(e[0])) edgesFrom.set(e[0], []);
+    edgesFrom.get(e[0]).push(e);
+  });
+  function ruleDestNames(id) {
+    return (edgesFrom.get(id) || [])
+      .filter((e) => e[2] === "routes" || e[2] === "mirrors")
+      .map((e) => ((panels[e[1]] && panels[e[1]].title) || "").toLowerCase());
+  }
+  function ruleOk(id, prefix, svc) {
+    const p = panels[id];
+    if (!p) return false;
+    const uriOk = !prefix ||
+      (p.uriVals || []).some((v) => v.startsWith(prefix)) ||
+      (p.uriRegexes || []).some((r) => r.includes(prefix));
+    const svcOk = !svc || ruleDestNames(id).some((t) => t.includes(svc));
+    return uriOk && svcOk;
+  }
+
+  /** Fade non-matching nodes everywhere; returns which sections / path hosts contain matches. */
+  function applyNodeFilters(prefix, svc) {
+    allNodes.forEach((n) => n.classList.remove("filter-fade"));
+    allEdges.forEach((e) => e.classList.remove("filter-fade"));
+    const res = { sections: new Set(), pathHosts: new Set() };
+    if (!prefix && !svc) return res;
+    const keep = new Set();
+    const grow = (id) => {
+      reach(id, fwd).forEach((x) => keep.add(x));
+      reach(id, rev).forEach((x) => keep.add(x));
+    };
+    document.querySelectorAll("#diagrams .node.rule").forEach((n) => {
+      if (ruleOk(n.dataset.id, prefix, svc)) {
+        res.sections.add(n.closest(".diagram-section").dataset.key);
+        grow(n.dataset.id);
+      }
+    });
+    (data.pathNodes || []).forEach((pn) => {
+      const uriOk = !prefix || (pn.rx ? pn.uri.includes(prefix) : pn.uri.startsWith(prefix));
+      const svcOk = !svc || pn.dests.includes(svc);
+      if (uriOk && svcOk) {
+        res.pathHosts.add(pn.host);
+        grow(pn.id);
+      }
+    });
+    allNodes.forEach((n) => n.classList.toggle("filter-fade", !keep.has(n.dataset.id)));
+    allEdges.forEach((e) => {
+      if (e.dataset.from === undefined) return;
+      e.classList.toggle("filter-fade", !(keep.has(e.dataset.from) && keep.has(e.dataset.to)));
+    });
+    return res;
+  }
+
+  function applyFilters() {
+    const gw = fGw.value, ns = fNs.value, host = fHost.value;
+    let prefix = fUri.value.trim();
+    if (prefix && !prefix.startsWith("/")) prefix = "/" + prefix;
+    const svc = fSvc.value.trim().toLowerCase();
+    const active = prefix !== "" || svc !== "";
+    const matched = applyNodeFilters(prefix, svc);
+    document.querySelectorAll(".diagram-section").forEach((sec) => {
+      const okGw = !gw || sec.dataset.gateway === gw;
+      const okNs = !ns || (sec.dataset.namespaces || "").split(",").includes(ns);
+      const okHost = !host || (sec.dataset.hosts || "").split(",").includes(host);
+      const okF = !active || matched.sections.has(sec.dataset.key);
+      sec.classList.toggle("hidden", !(okGw && okNs && okHost && okF));
+    });
+    // paths graph groups
+    document.querySelectorAll("#paths-graph .pgroup-g").forEach((g) => {
+      const okGw = !gw || (g.dataset.gws || "").split(",").includes(gw);
+      const okNs = !ns || (g.dataset.ns || "").split(",").includes(ns);
+      const okHost = !host || g.dataset.host === host;
+      const okF = !active || matched.pathHosts.has(g.dataset.host);
+      g.classList.toggle("hidden", !(okGw && okNs && okHost && okF));
+    });
+    // paths table rows
+    document.querySelectorAll("#paths-table .pgroup").forEach((g) => {
+      const okGw = !gw || (g.dataset.gws || "").split(",").includes(gw);
+      const okNs = !ns || (g.dataset.ns || "").split(",").includes(ns);
+      const okHost = !host || g.dataset.host === host;
+      let anyRow = false;
+      g.querySelectorAll("tr[data-rule]").forEach((tr) => {
+        const v = tr.dataset.uri || "";
+        const okUri = !prefix || (tr.dataset.regex === "1" ? v.includes(prefix) : v.startsWith(prefix));
+        const okSvc = !svc || (tr.dataset.dests || "").includes(svc);
+        tr.classList.toggle("hidden", !(okUri && okSvc));
+        if (okUri && okSvc) anyRow = true;
+      });
+      g.classList.toggle("hidden", !(okGw && okNs && okHost && anyRow));
+    });
+    document.body.classList.toggle("warnonly", fWarn.checked);
+  }
+  [fGw, fNs, fHost].forEach((s) => s.addEventListener("change", applyFilters));
+  fWarn.addEventListener("change", applyFilters);
+  let typeTimer;
+  [fUri, fSvc].forEach((el) => {
+    el.addEventListener("input", () => { clearTimeout(typeTimer); typeTimer = setTimeout(applyFilters, 150); });
+    el.addEventListener("change", applyFilters);
+  });
+
+  // section collapse
+  document.querySelectorAll(".diagram-section h2").forEach((h2) => {
+    h2.addEventListener("click", () => h2.parentElement.classList.toggle("collapsed"));
+  });
+
+  // view switcher: diagram (objects) vs paths (host → match → service)
+  const vDiagram = document.getElementById("v-diagram");
+  const vPaths = document.getElementById("v-paths");
+  function setView(paths) {
+    document.body.classList.toggle("paths-mode", paths);
+    vPaths.classList.toggle("active", paths);
+    vDiagram.classList.toggle("active", !paths);
+  }
+  vDiagram.addEventListener("click", () => setView(false));
+  vPaths.addEventListener("click", () => setView(true));
+
+  // paths sub-view: graph (default) vs table
+  const pGraph = document.getElementById("p-graph");
+  const pTable = document.getElementById("p-table");
+  function setPathsMode(table) {
+    document.getElementById("paths-view").classList.toggle("mode-table", table);
+    pTable.classList.toggle("active", table);
+    pGraph.classList.toggle("active", !table);
+  }
+  pGraph.addEventListener("click", () => setPathsMode(false));
+  pTable.addEventListener("click", () => setPathsMode(true));
+
+  // paths-view rows open the rule's detail panel
+  document.querySelectorAll("#paths-view tr[data-rule]").forEach((tr) => {
+    tr.addEventListener("click", () => showPanel(tr.dataset.rule, null));
+  });
+
+  // toggle the findings/details side panel — circle chevron on the pane edge
+  const toggleAside = document.getElementById("toggle-aside");
+  const toggleChev = document.getElementById("toggle-chev");
+  toggleAside.addEventListener("click", () => {
+    const hidden = document.body.classList.toggle("aside-hidden");
+    toggleAside.setAttribute("aria-expanded", String(!hidden));
+    // ‹ (left) when panel open = click to close; › (right) when closed = click to open
+    toggleChev.setAttribute("points", hidden ? "2,1 7,7 2,13" : "6,1 1,7 6,13");
+  });
+
+  // zoom: scale the inline SVGs by width (viewBox keeps the aspect ratio)
+  const svgs = Array.from(document.querySelectorAll(".svg-wrap > svg"));
+  svgs.forEach((s) => { s.dataset.ow = s.getAttribute("width"); s.removeAttribute("height"); });
+  let zoom = 1;
+  function applyZoom() {
+    svgs.forEach((s) => s.setAttribute("width", String(Math.max(1, Math.round(s.dataset.ow * zoom)))));
+    document.getElementById("z-pct").textContent = Math.round(zoom * 100) + "%";
+  }
+  function setZoom(z) { zoom = Math.min(2, Math.max(0.25, z)); applyZoom(); }
+  document.getElementById("z-in").addEventListener("click", () => setZoom(zoom * 1.2));
+  document.getElementById("z-out").addEventListener("click", () => setZoom(zoom / 1.2));
+  document.getElementById("z-reset").addEventListener("click", () => setZoom(1));
+  document.getElementById("z-fit").addEventListener("click", () => {
+    // fit whatever diagrams are currently visible (object view or paths graph)
+    const fits = svgs
+      .filter((s) => s.getBoundingClientRect().width > 0)
+      .map((s) => (s.closest(".svg-wrap").clientWidth - 18) / Number(s.dataset.ow));
+    if (fits.length) setZoom(Math.min(1, ...fits));
+  });
+  applyZoom();
+})();
+</script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 # Dev environment for istio-viz. `make setup` is the one-shot entry point.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup install build test link unlink dev-link dev-unlink clean
+.PHONY: help setup install build test link unlink dev-link dev-unlink demo clean
 
 # npm's global bin dir (e.g. /opt/homebrew/bin) — where the dev shim is installed.
 DEV_BIN := $(shell npm prefix -g)/bin
@@ -38,6 +38,15 @@ dev-link: node_modules ## bind `istio-viz` to live src via tsx (no build; edits 
 dev-unlink: ## remove the dev shim
 	@rm -f "$(DEV_BIN)/istio-viz"
 	@echo "removed dev shim from $(DEV_BIN)"
+
+demo: node_modules ## regenerate the live demo (site/demo.html) embedded on the landing page
+	node --import tsx src/index.ts trace \
+		testdata/acme/00-gateways.yaml testdata/acme/01-services.yaml \
+		testdata/acme/02-destinationrules.yaml testdata/acme/10-vs-web.yaml \
+		testdata/acme/11-vs-api.yaml testdata/acme/12-vs-grpc.yaml \
+		testdata/acme/20-mesh.yaml testdata/acme/30-l4.yaml \
+		--host api.acme.com --path /v2/orders --method POST --header x-canary=true \
+		--format html -o site/demo.html
 
 node_modules: ## ensure dependencies are installed (used as a prerequisite)
 	npm install
