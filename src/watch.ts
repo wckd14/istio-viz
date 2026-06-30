@@ -75,7 +75,8 @@ export function startWatchServer(paths: string[], opts: WatchOpts = {}): Promise
   let lastClusterHash = "";
 
   const rebuild = (clusterResources?: import("./types.js").Resource[]): void => {
-    generation++;
+    let nextHtml: string;
+    let summary: string;
     try {
       const fileLoaded = paths.length > 0 ? loadPaths(paths) : { resources: [], warnings: [] };
       const clusterLoaded =
@@ -89,15 +90,25 @@ export function startWatchServer(paths: string[], opts: WatchOpts = {}): Promise
         : fileLoaded;
       for (const w of loaded.warnings) log(`warning: ${w}`);
       const model = filterModel(resolve(loaded.resources), opts.filter ?? {});
-      html = renderHtml(model, { title: "istio-viz — live" })
+      nextHtml = renderHtml(model, { title: "istio-viz — live" })
         .replace("</header>", `</header>${warningsBanner(loaded.warnings)}`)
         .replace("</body>", `${LIVE_CLIENT}</body>`);
-      log(`rebuilt (#${generation}): ${model.findings.length} finding(s)`);
+      summary = `${model.findings.length} finding(s)`;
     } catch (err) {
       const msg = (err as Error).message;
-      log(`rebuild failed: ${msg}`);
-      html = errorPage(msg);
+      nextHtml = errorPage(msg);
+      summary = `rebuild failed: ${msg}`;
     }
+
+    // Skip no-op rebuilds: macOS fs.watch (FSEvents) coalesces and replays events
+    // for files that existed when the watcher started, and editors emit spurious
+    // writes. If the rendered output is byte-identical, don't churn connected
+    // browsers with a reload.
+    if (generation > 0 && nextHtml === html) return;
+
+    generation++;
+    html = nextHtml;
+    log(`rebuilt (#${generation}): ${summary}`);
     for (const res of clients) res.write(`event: reload\ndata: ${generation}\n\n`);
   };
 

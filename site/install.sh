@@ -8,7 +8,7 @@
 #   curl -fsSL https://istio-viz.wckd14.xyz/install.sh | bash -s -- v0.2.0
 #
 # Override install directory:
-#   INSTALL_DIR=~/.local/bin curl -fsSL https://istio-viz.wckd14.xyz/install.sh | bash
+#   INSTALL_DIR=/usr/local/bin curl -fsSL https://istio-viz.wckd14.xyz/install.sh | bash
 #
 # Supported platforms:
 #   linux-x64, linux-arm64, macos-arm64
@@ -16,7 +16,7 @@
 set -euo pipefail
 
 REPO="wckd14/istio-viz"
-INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+INSTALL_DIR="${INSTALL_DIR:-${HOME}/.local/bin}"
 VERSION="${ISTIO_VIZ_VERSION:-${1:-}}"
 
 # ── color helpers (disabled when stdout is not a TTY) ─────────────────────────
@@ -113,22 +113,17 @@ _do_install() {
   install -m755 "$TMP/istio-viz" "$1/istio-viz"
 }
 
-if [ -w "$INSTALL_DIR" ]; then
-  _do_install "$INSTALL_DIR"
-elif command -v sudo >/dev/null 2>&1; then
-  step "sudo required to write to $INSTALL_DIR..."
-  sudo install -m755 "$TMP/istio-viz" "$INSTALL_DIR/istio-viz"
-else
-  INSTALL_DIR="${HOME}/.local/bin"
-  warn "No write access to /usr/local/bin and sudo not available."
-  warn "Installing to $INSTALL_DIR instead."
-  _do_install "$INSTALL_DIR"
-  case ":${PATH}:" in
-    *":${INSTALL_DIR}:"*) ;;
-    *) warn "Add $INSTALL_DIR to your PATH:"
-       warn "  export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
-  esac
+if ! mkdir -p "$INSTALL_DIR" 2>/dev/null || [ ! -w "$INSTALL_DIR" ]; then
+  die "No write access to $INSTALL_DIR. Set INSTALL_DIR to a writable directory and re-run."
 fi
+
+_do_install "$INSTALL_DIR"
+
+case ":${PATH}:" in
+  *":${INSTALL_DIR}:"*) ;;
+  *) warn "$INSTALL_DIR is not on your PATH. Add it:"
+     warn "  export PATH=\"${INSTALL_DIR}:\$PATH\"" ;;
+esac
 
 ok "Installed → ${c_bold}${INSTALL_DIR}/istio-viz${c_reset}"
 

@@ -9,6 +9,25 @@ import { layoutModel, layoutPathsGroups, modBadge, type PathsGroupLayout } from 
 import { SVG_CSS, esc, indexFindings, renderSectionSvg } from "./svg.js";
 import { matchSummary } from "./text.js";
 
+/** Inline brand mark (the node-triangle from site/logo.svg) shown in the report header. */
+const LOGO_SVG =
+  '<svg class="brand-logo" width="32" height="30" viewBox="0 2 32 30" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="istio-viz">' +
+  '<g stroke="#1A8F85" stroke-width="2.5" stroke-linecap="round">' +
+  '<line x1="16" y1="6" x2="4" y2="28"/><line x1="16" y1="6" x2="28" y2="28"/><line x1="4" y1="28" x2="28" y2="28"/></g>' +
+  '<g fill="#1A8F85"><circle cx="16" cy="6" r="4"/><circle cx="4" cy="28" r="4"/><circle cx="28" cy="28" r="4"/></g>' +
+  "</svg>";
+
+/** Favicon (matches site/favicon.svg), URL-encoded for an inline data URI. */
+const FAVICON_DATA_URI =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    '<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+      '<g stroke="#1A8F85" stroke-width="4" stroke-linecap="round">' +
+      '<line x1="32" y1="14" x2="12" y2="48"/><line x1="32" y1="14" x2="52" y2="48"/><line x1="12" y1="48" x2="52" y2="48"/></g>' +
+      '<g fill="#1A8F85"><circle cx="32" cy="14" r="7"/><circle cx="12" cy="48" r="7"/><circle cx="52" cy="48" r="7"/></g>' +
+      "</svg>",
+  );
+
 interface PanelInfo {
   title: string;
   kind: string;
@@ -96,21 +115,23 @@ export function renderHtml(model: RoutingModel, opts: { trace?: TraceResult; tit
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URI}">
 <title>${esc(opts.title ?? "istio-viz — L7 routing")}</title>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
   body { margin: 0; font: 14px ui-sans-serif, system-ui, sans-serif; background: #f8fafc; color: #0f172a; }
   header { position: sticky; top: 0; z-index: 10; background: #fff; border-bottom: 1px solid #e2e8f0;
-           padding: 10px 16px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
-  header h1 { font-size: 16px; margin: 0 12px 0 0; }
+           padding: 8px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  header h1 { margin: 0; display: flex; align-items: center; }
+  header h1 .brand-logo { height: 22px; width: auto; display: block; }
   header label { font-size: 12px; color: #475569; display: flex; gap: 5px; align-items: center; }
   header select, header input[type=text] { font: 12px ui-monospace, monospace; padding: 3px 6px;
            border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; }
   main { display: grid; grid-template-columns: 1fr 380px; gap: 0; }
   body.aside-hidden main { grid-template-columns: 1fr 12px; }
   body.aside-hidden aside { display: none; }
-  #aside-wrap { position: sticky; top: 49px; height: calc(100vh - 49px); overflow: visible;
+  #aside-wrap { position: sticky; top: 41px; height: calc(100vh - 41px); overflow: visible;
                 border-left: 1px solid #e2e8f0; }
   #toggle-aside { position: absolute; left: -12px; top: 50%; transform: translateY(-50%);
                   width: 24px; height: 24px; border-radius: 50%; border: 1px solid #cbd5e1;
@@ -200,7 +221,7 @@ export function renderHtml(model: RoutingModel, opts: { trace?: TraceResult; tit
 </head>
 <body>
 <header>
-  <h1>istio-viz</h1>
+  <h1>${LOGO_SVG}</h1>
   <span class="viewsw">
     <button id="v-diagram" class="active" title="object diagram view">diagram</button><button id="v-paths" title="consolidated host → match → service view">paths</button>
   </span>
