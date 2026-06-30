@@ -31,18 +31,22 @@ During development, run directly from source with `npm run dev -- <args>`
 ## Usage
 
 ```
-istio-viz render <paths...> [-o out.html] [--format html|svg|png|dot|text|paths]
+istio-viz render [paths...] [-o out.html] [--format html|svg|png|dot|text|paths]
                             [--gateway NAME] [--host PATTERN] [--namespace NS]
-                            [--uri PREFIX] [--strict]
-istio-viz trace  <paths...> --host H --path P [--method M] [--header k=v ...]
+                            [--uri PREFIX] [--service NAME] [--strict]
+                            [--cluster] [--context CTX] [--kubeconfig PATH]
+istio-viz trace  [paths...] --host H --path P [--method M] [--header k=v ...]
                             [--port N] [-o out.html | --format text]
-istio-viz lint   <paths...> [--strict]
-istio-viz watch  <paths...> [--port N] [--gateway NAME] [--host PATTERN] [--namespace NS]
-                            [--uri PREFIX]
+                            [--cluster] [--context CTX] [--kubeconfig PATH]
+istio-viz lint   [paths...] [--strict]
+                            [--cluster] [--context CTX] [--kubeconfig PATH]
+istio-viz watch  [paths...] [--port N] [--gateway NAME] [--host PATTERN] [--namespace NS]
+                            [--uri PREFIX] [--service NAME]
+                            [--cluster] [--context CTX] [--kubeconfig PATH] [--poll-interval N]
 ```
 
-`<paths...>` are YAML files or directories (recursed, multi-document files
-supported). All of `networking.istio.io/v1alpha3`, `v1beta1`, and `v1` are
+`[paths...]` are YAML files or directories (recursed, multi-document files
+supported), and are optional when `--cluster` is set. All of `networking.istio.io/v1alpha3`, `v1beta1`, and `v1` are
 accepted; unrecognized kinds are ignored with a warning. A top-level
 Kubernetes `List` (the shape of a `kubectl get … -o yaml` dump) is unwrapped
 transparently — its `items` are classified individually and non-network kinds
@@ -103,11 +107,39 @@ is byte-stable: restructuring VirtualServices without changing effective
 routing produces an identical file, and `diff` between two exports shows only
 real routing changes.
 
+### Live cluster source
+
+With `--cluster`, the tool fetches Gateway, VirtualService, Service, and
+DestinationRule resources from the active Kubernetes cluster via the `kubectl`
+binary on your PATH (no k8s client library, no write calls). It issues a single
+`kubectl get … --output yaml` per call; if the Istio CRDs aren't installed it
+falls back to per-group fetches and warns instead of failing, so the Service
+topology still renders.
+
+```sh
+istio-viz render --cluster -o routes.html
+istio-viz render --cluster --context prod-ctx --namespace istio-system -o routes.html
+istio-viz trace  --cluster --host shop.example.com --path /api/v2/cart
+istio-viz watch  --cluster --poll-interval 15
+```
+
+`--cluster` may be combined with file/directory arguments: files are loaded
+first and cluster resources are merged in afterward, with the **file winning**
+on a same kind+namespace+name conflict (preview local changes against live
+state). Source locations show as `cluster://<context>/<namespace>/<Kind>/<name>`
+instead of `file:line`. Flags: `--context CTX` (kubeconfig context),
+`--namespace NS` (restrict fetch; otherwise all namespaces), `--kubeconfig PATH`,
+and `--poll-interval N` (watch mode re-fetch interval, default 30s, floored at
+5s). `--context`/`--kubeconfig` imply `--cluster`.
+
 ### Live mode
 
 `istio-viz watch` serves the HTML report at `http://127.0.0.1:<port>/` and
 rebuilds it whenever the inputs change, pushing a reload to open browser tabs
-via Server-Sent Events. Filter selections survive reloads. For kustomize
+via Server-Sent Events. With `--cluster`, file-watching is supplemented by
+periodic `kubectl get` polling every `--poll-interval` seconds; a re-render is
+emitted only when the fetched resource set differs from the previous poll.
+Filter selections survive reloads. For kustomize
 overlays, `kustomize build` is re-run on each change, and directories
 referenced by `resources:`/`bases:`/`components:`/`patches:` (e.g. a base
 outside the overlay) are watched too. Rebuild failures show an error page
@@ -178,7 +210,7 @@ finding is present. `trace` exits 1 when no rule matches.
 
 - TCP/TLS route blocks are listed under "L4 (not diagrammed)" but not drawn.
 - PeerAuthentication / AuthorizationPolicy, EnvoyFilter, ServiceEntry, Sidecar,
-  and live-cluster mode are out of scope.
+  and multi-cluster / east-west gateway topologies are out of scope.
 - `png` export uses the optional `@resvg/resvg-js` dependency; if it isn't
   installed, use `--format svg`.
 - `sourceLabels` match conditions can't be evaluated for a synthetic edge
@@ -189,18 +221,21 @@ finding is present. `trace` exits 1 when no rule matches.
 ```
 src/
   loader.ts        YAML ingestion, kind classification, file:line tracking
+  cluster.ts       live cluster backend: kubectl get + merge + poll hashing
   kustomize.ts     overlay detection, `kustomize build` integration, watch-dir discovery
   hosts.ts         Istio host/wildcard semantics (match, intersect, FQDN expansion)
   resolve.ts       Gateway↔VS binding, destination/subset resolution, lints
   trace.ts         Envoy-style first-match-wins request evaluation
-  watch.ts         live mode: HTTP server + fs.watch + SSE auto-reload
+  paths.ts         canonical host → match → service paths text export
+  types.ts         shared RoutingModel / Resource / TraceRequest types
+  watch.ts         live mode: HTTP server + fs.watch + SSE auto-reload + cluster poll
   render/
     text.ts        terminal tree
     dot.ts         Graphviz source
     layout.ts      layered DAG geometry (shared by svg + html)
     svg.ts         SVG emitter (static export + html embed)
     html.ts        self-contained interactive report
-  index.ts         CLI (render / trace / lint)
+  index.ts         CLI (render / trace / lint / watch)
 testdata/          Bookinfo + synthetic fixtures used by the tests
 ```
 

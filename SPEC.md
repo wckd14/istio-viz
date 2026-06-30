@@ -59,6 +59,17 @@ Unrecognized kinds are ignored with a warning. Both `v1alpha3`, `v1beta1`, and `
 
 ### 4.1 Kustomize overlays
 
+If an input path is a directory containing a `kustomization.yaml` / `kustomization.yml` / `Kustomization` file (or is such a file itself), the tool does not walk it for raw YAML. Instead it renders the overlay with `kustomize build <dir>` (falling back to `kubectl kustomize <dir>` when the standalone binary is absent) and ingests the generated multi-document output:
+
+```
+istio-viz render ./overlays/prod -o routes.html
+istio-viz trace  ./overlays/prod --host shop.example.com --path /api/v2/cart
+```
+
+The build output typically contains many non-network kinds (Deployment, ConfigMap, PVC, ...); these are filtered out silently — the "unrecognized kind" warning is suppressed for kustomize-generated input, and only the four recognized kinds enter the model. Source locations for findings refer to the generated stream (`<dir> (kustomize build):line`), since kustomize does not preserve origin file positions. A failed kustomize build is a fatal CLI error with kustomize's stderr passed through. Kustomize detection applies to the given path only, not to subdirectories discovered while walking a plain directory.
+
+Namespace handling: short destination hosts (e.g. `reviews`) are expanded to FQDN form (`reviews.<namespace>.svc.cluster.local`) using the resource's own namespace, mirroring Istio's resolution rules. Mesh-internal VirtualServices (`gateways: [mesh]` or unset) are rendered in a separate "mesh routing" section rather than under a Gateway.
+
 ### 4.2 Live cluster source
 
 When the `--cluster` flag is present, the tool fetches resources from the active Kubernetes cluster instead of (or in addition to) local files. All cluster I/O is delegated to the `kubectl` binary already expected to be on the PATH.
@@ -103,10 +114,10 @@ The resulting YAML `List` is fed into the existing multi-document parser unchang
 Instead of `file:line`, findings and panel detail rows show:
 
 ```
-cluster/<context>/<namespace>/<Kind>/<name>
+cluster://<context>/<namespace>/<Kind>/<name>
 ```
 
-e.g. `cluster/prod-ctx/istio-system/VirtualService/shop-routes`
+e.g. `cluster://prod-ctx/istio-system/VirtualService/shop-routes`
 
 #### RBAC requirements
 
@@ -117,17 +128,6 @@ The caller must have `get`/`list` on `gateways`, `virtualservices`, `destination
 - `kubectl` not on PATH → fatal error with remediation hint.
 - Cluster unreachable / context not found → fatal error, stderr from kubectl passed through.
 - Partial fetch failure (e.g. CRD not installed, no VirtualServices exist) → warning; tool continues with whatever was returned. An empty model produces a clear "no resources found" message rather than a blank diagram.
-
-If an input path is a directory containing a `kustomization.yaml` / `kustomization.yml` / `Kustomization` file (or is such a file itself), the tool does not walk it for raw YAML. Instead it renders the overlay with `kustomize build <dir>` (falling back to `kubectl kustomize <dir>` when the standalone binary is absent) and ingests the generated multi-document output:
-
-```
-istio-viz render ./overlays/prod -o routes.html
-istio-viz trace  ./overlays/prod --host shop.example.com --path /api/v2/cart
-```
-
-The build output typically contains many non-network kinds (Deployment, ConfigMap, PVC, ...); these are filtered out silently — the "unrecognized kind" warning is suppressed for kustomize-generated input, and only the four recognized kinds enter the model. Source locations for findings refer to the generated stream (`<dir> (kustomize build):line`), since kustomize does not preserve origin file positions. A failed kustomize build is a fatal CLI error with kustomize's stderr passed through. Kustomize detection applies to the given path only, not to subdirectories discovered while walking a plain directory.
-
-Namespace handling: short destination hosts (e.g. `reviews`) are expanded to FQDN form (`reviews.<namespace>.svc.cluster.local`) using the resource's own namespace, mirroring Istio's resolution rules. Mesh-internal VirtualServices (`gateways: [mesh]` or unset) are rendered in a separate "mesh routing" section rather than under a Gateway.
 
 ## 5. Routing Model (internal representation)
 
@@ -217,7 +217,7 @@ istio-viz watch <paths...> [--port N] [--gateway NAME] [--host PATTERN] [--names
 - The served page is the normal self-contained HTML report plus an injected Server-Sent-Events client; on each rebuild the browser reloads automatically. Filter state (gateway/namespace/host selections) is preserved across reloads via `sessionStorage`.
 - Rebuild failures (YAML or kustomize errors) do not kill the server: the error is shown in the browser and on stderr, and the next successful rebuild replaces it.
 - Watching is recursive with debounce; changes are detected for `*.yaml`/`*.yml` files (and any file inside a kustomize root, since generators may consume non-YAML files).
-- When `--cluster` is set, file-watching is replaced (or supplemented) by periodic polling: `kubectl get` is re-run every `--poll-interval` seconds (default 30). A new render is emitted only when the fetched resource set differs from the previous fetch (compared as a canonical JSON hash). The browser page reloads on change in the same way as the file-watch path.
+- When `--cluster` is set, file-watching is replaced (or supplemented) by periodic polling: `kubectl get` is re-run every `--poll-interval` seconds (default 30, floored at 5). A new render is emitted only when the fetched resource set differs from the previous fetch (compared as a canonical JSON hash). The browser page reloads on change in the same way as the file-watch path.
 - `--cluster` and file inputs may be combined in watch mode: file changes trigger an immediate re-render; poll ticks trigger a re-render only if the cluster diff is non-empty.
 
 This is the only mode that runs a server; all `render` outputs remain static and offline.

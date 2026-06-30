@@ -12,7 +12,7 @@
         document.documentElement.setAttribute('data-theme','dark');
     })();
   </script>
-  <meta name="description" content="CLI tool that renders your Istio service mesh routing as interactive diagrams. Trace requests, lint configs, and watch for changes — no cluster access needed.">
+  <meta name="description" content="CLI tool that renders your Istio service mesh routing as interactive diagrams. Trace requests, lint configs, and watch for changes — offline against local manifests, or live from your cluster via kubectl.">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -845,12 +845,12 @@
     <div class="hero-copy">
       <p class="eyebrow">Istio service mesh tooling</p>
       <h1 id="hero-heading">Your routes,<br>made visible.</h1>
-      <p class="hero-sub">Parse Gateway, VirtualService, and DestinationRule manifests offline and render the full L7 routing topology as an interactive diagram. Trace requests, lint configs, watch for changes.</p>
+      <p class="hero-sub">Parse Gateway, VirtualService, and DestinationRule manifests — offline or live from your cluster — and render the full L7 routing topology as an interactive diagram. Trace requests, lint configs, watch for changes.</p>
       <div class="hero-meta">
         <span class="badge">macOS (Apple Silicon)</span>
         <span class="badge">Linux x64 / arm64</span>
         <span class="badge">Works offline</span>
-        <span class="badge">No cluster access needed</span>
+        <span class="badge">Live cluster mode</span>
       </div>
       <div class="cta-group">
         <a href="#install" class="cta-primary">
@@ -950,7 +950,7 @@
         </div>
         <span class="feature-cmd">render</span>
         <h3>Routing diagrams</h3>
-        <p>Generate interactive HTML, SVG, PNG, Graphviz DOT, or a diff-friendly text tree — all from a single command, all formats from the same routing model.</p>
+        <p>Generate interactive HTML, SVG, PNG, Graphviz DOT, or a diff-friendly text tree from local manifests or a live cluster (<code style="font-family:ui-monospace,monospace;font-size:0.85em">--cluster</code>) — all formats from the same routing model.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon" aria-hidden="true">
@@ -984,7 +984,7 @@
         </div>
         <span class="feature-cmd">watch</span>
         <h3>Live development</h3>
-        <p>Local HTTP server that re-renders on every file change and reloads the browser automatically via SSE. Filter selections and Kustomize overlays persist across reloads.</p>
+        <p>Local HTTP server that re-renders on every file change — or cluster poll with <code style="font-family:ui-monospace,monospace;font-size:0.85em">--cluster</code> — and reloads the browser automatically via SSE. Filter selections and Kustomize overlays persist across reloads.</p>
       </div>
     </div>
   </div>
@@ -1006,7 +1006,7 @@
         <div class="step-code"><span class="dim"># files, directories, or cluster</span>
 istio-viz render ./overlays/prod
 <span class="dim"># or point at a live cluster</span>
-istio-viz render --context staging</div>
+istio-viz render --cluster --context staging</div>
       </div>
       <div class="step">
         <div class="step-num" aria-hidden="true">2</div>
@@ -1120,7 +1120,7 @@ Hosts → RouteRules → Destinations</div>
   <div class="install-inner">
     <p class="section-eyebrow">Get started</p>
     <h2 id="install-heading">Up in thirty seconds.</h2>
-    <p>No cluster access needed. Works entirely offline against your local manifests.</p>
+    <p>No cluster access required — works entirely offline against your local manifests, or reads live state straight from your cluster via kubectl.</p>
     <div class="code-block-wrap">
       <div class="code-block">
         <span class="cb-cmt"># Install (macOS · Linux x64 · Linux arm64)</span>
@@ -1140,6 +1140,9 @@ Hosts → RouteRules → Destinations</div>
         <div>&nbsp;</div>
         <span class="cb-cmt"># Watch for changes during development</span>
         <div><span class="cb-p">$ </span><span class="cb-cmd">istio-viz watch </span><span class="cb-arg">./overlays/dev</span><span class="cb-flag"> --port</span><span class="cb-cmd"> 4400</span></div>
+        <div>&nbsp;</div>
+        <span class="cb-cmt"># Or read live state straight from the cluster</span>
+        <div><span class="cb-p">$ </span><span class="cb-cmd">istio-viz render </span><span class="cb-flag">--cluster --context</span><span class="cb-cmd"> prod</span><span class="cb-flag"> -o</span><span class="cb-cmd"> routes.html</span></div>
       </div>
     </div>
     <p class="req-note">Windows: <a href="https://github.com/wckd14/istio-viz/releases" target="_blank" rel="noopener">download from GitHub Releases</a> &nbsp;·&nbsp; <a href="https://github.com/wckd14/istio-viz" target="_blank" rel="noopener">Source on GitHub</a></p>
