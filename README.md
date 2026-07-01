@@ -6,6 +6,8 @@ VirtualService, Service, and DestinationRule resources, simulates Envoy's
 first-match-wins evaluation, and renders the result as an interactive diagram,
 terminal tree, Graphviz source, or static SVG/PNG.
 
+![istio-viz - Your routes, made visible.](site/og.svg)
+
 Implements [SPEC.md](./SPEC.md).
 
 ## Install / build
